@@ -1,0 +1,68 @@
+name: nyayalens_client
+description: "NyayaLens Flutter web client — AI accountability for hiring fairness."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.5.0
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management
+  flutter_riverpod: ^2.6.1
+  riverpod_annotation: ^2.6.1
+
+  # Routing
+  go_router: ^14.6.2
+
+  # HTTP client (Firebase-Auth token interceptor lives in shared/api_client/)
+  dio: ^5.7.0
+
+  # Models & serialisation
+  freezed_annotation: ^2.4.4
+  json_annotation: ^4.9.0
+  collection: ^1.18.0
+
+  # Charts (bias heatmap uses CustomPainter; metric cards use fl_chart)
+  fl_chart: ^0.69.2
+
+  # PDF viewer for report preview screen
+  pdfx: ^2.8.0
+  file_picker: ^8.1.6
+
+  # Firebase (lazy-loaded; backend does the heavy lifting)
+  firebase_core: ^3.8.0
+  firebase_auth: ^5.3.4
+
+  # Google Sign-In (auth entry on S01)
+  google_sign_in: ^6.2.2
+
+  # Theming & icons
+  google_fonts: ^6.2.1
+  material_design_icons_flutter: ^7.0.7296
+
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # Lint + analyzer
+  flutter_lints: ^5.0.0
+
+  # Codegen (freezed + riverpod + json_serializable)
+  build_runner: ^2.4.13
+  freezed: ^2.5.7
+  json_serializable: ^6.9.0
+  riverpod_generator: ^2.6.3
+  custom_lint: ^0.7.0
+  riverpod_lint: ^2.6.3
+
+flutter:
+  uses-material-design: true
+  # Add assets and fonts as they land in week 2.
+  # assets:
+  #   - assets/images/
