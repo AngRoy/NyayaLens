@@ -72,6 +72,7 @@ frontend/ios/
 frontend/linux/
 frontend/macos/
 frontend/windows/
+frontend/coverage/
 # We build web-first; platform folders are regenerated as needed.
 
 # Generated files (freezed, json_serializable)
