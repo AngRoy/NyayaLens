@@ -1,0 +1,97 @@
+NyayaLens — The Eye of Justice
+Copyright 2026 Team Zenith (NyayaLens contributors)
+
+This product includes software developed by Team Zenith.
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+================================================================================
+Third-Party Acknowledgements
+================================================================================
+
+NyayaLens stands on the shoulders of the following open-source projects. We
+studied their architecture, metric definitions, and test fixtures while
+building our own custom engine. None of their code is included verbatim in
+this repository unless explicitly noted.
+
+--------------------------------------------------------------------------------
+IBM AI Fairness 360 (AIF360)
+  Source:  https://github.com/Trusted-AI/AIF360
+  License: Apache License 2.0
+  Used as: Reference implementation for Consistency score (k-NN, Zemel et al.
+           2013) and Reweighing (Kamiran/Calders 2012); test oracle fixtures
+           for SPD, DIR, EOD numerical correctness (see
+           backend/tests/fixtures/aif360_oracles.json).
+--------------------------------------------------------------------------------
+Microsoft Fairlearn
+  Source:  https://github.com/fairlearn/fairlearn
+  License: MIT License
+  Used as: Reference for edge-case handling patterns (errors="coerce",
+           empty-group NaN coercion in MetricFrame.difference/.ratio);
+           additional numerical test fixtures for metric validation.
+--------------------------------------------------------------------------------
+UChicago DSSG Aequitas
+  Source:  https://github.com/dssg/aequitas
+  License: MIT License
+  Used as: Reference for 80% rule (EEOC) threshold logic and
+           policy-oriented disparity framing.
+--------------------------------------------------------------------------------
+Holistic AI
+  Source:  https://github.com/holistic-ai/holisticai
+  License: Apache License 2.0
+  Used as: Reference for clean binary-group metric API shapes (SPD, DIR,
+           EOD functional signatures).
+--------------------------------------------------------------------------------
+Microsoft Presidio
+  Source:  https://github.com/microsoft/presidio
+  License: MIT License
+  Used as: Direct runtime dependency (presidio-analyzer). We use its
+           PatternRecognizer architecture and the pre-built India-specific
+           recognizers (Aadhaar, PAN, GSTIN, Passport, Voter ID, Vehicle
+           Registration) as part of the NyayaLens PII Pre-Scrubber.
+--------------------------------------------------------------------------------
+Oracle Guardian AI
+  Source:  https://github.com/oracle-samples/guardian-ai
+  License: Universal Permissive License (UPL) v1.0
+  Used as: Reference for privacy-aware fairness patterns (aggregated
+           subgroup statistics, not individual records).
+--------------------------------------------------------------------------------
+Google PAIR: What-If Tool / LIT
+  Source:  https://github.com/PAIR-code/what-if-tool
+           https://github.com/PAIR-code/lit
+  License: Apache License 2.0
+  Used as: UX inspiration for counterfactual interaction and metric display
+           patterns (post-MVP reference only; no code reused).
+--------------------------------------------------------------------------------
+Microsoft Responsible AI Toolbox
+  Source:  https://github.com/microsoft/responsible-ai-toolbox
+  License: MIT License
+  Used as: UX inspiration for bias heatmap and cohort management patterns
+           (no code reused; original Flutter implementation).
+--------------------------------------------------------------------------------
+Google Agents CLI / ADK
+  Source:  https://github.com/google/agents-cli
+  License: Apache License 2.0
+  Used as: Methodology reference for post-MVP agentic remediation workflows.
+           Not integrated in v1.0.
+--------------------------------------------------------------------------------
+
+Runtime Python dependencies (see backend/pyproject.toml for current versions)
+include fastapi, uvicorn, pydantic, numpy, pandas, google-generativeai,
+firebase-admin, presidio-analyzer, reportlab, and tenacity. Each is used under
+its respective upstream license.
+
+Runtime Dart/Flutter dependencies (see frontend/pubspec.yaml) include
+flutter_riverpod, go_router, dio, fl_chart, freezed, firebase_auth, and pdfx.
+Each is used under its respective upstream license.
+
+================================================================================
+Data Sources
+================================================================================
+
+- shared/sample_data/placement_synthetic.csv is NyayaLens-generated synthetic
+  data with seeded disparities for demonstration. No real individuals.
+- shared/sample_data/german_credit.csv (if included) derives from the UCI
+  Machine Learning Repository "Statlog (German Credit Data)" dataset.
+- shared/sample_data/placement_real_anchor.csv is intentionally NOT committed
+  to this repository (see .gitignore). Any real placement data used must be
+  de-identified, manually approved, and stored outside version control.
