@@ -1,0 +1,93 @@
+name: contract-test
+
+# Runs whenever the API DTO contract might drift — either side.
+#
+# Stage 1: the backend generates JSON Schemas from its Pydantic models and
+#          uploads them as artifacts.
+# Stage 2: the frontend downloads the schemas and verifies its Freezed DTOs
+#          can parse sample payloads matching them. This catches drift early,
+#          not at runtime.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/nyayalens/models/**"
+      - "frontend/lib/shared/models/**"
+      - "shared/schemas/**"
+      - ".github/workflows/contract-test.yml"
+  pull_request:
+    paths:
+      - "backend/nyayalens/models/**"
+      - "frontend/lib/shared/models/**"
+      - "shared/schemas/**"
+      - ".github/workflows/contract-test.yml"
+
+concurrency:
+  group: contract-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  generate-schemas:
+    name: Export API JSON schemas from backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Export JSON schemas
+        # `nyayalens.models.api.export_schemas` (added in Week 2) walks the
+        # Pydantic DTOs and writes them to shared/schemas/*.json.
+        run: |
+          mkdir -p ../shared/schemas
+          echo "TODO: scripts/export_schemas.py to be added in Week 2 alongside api/ DTOs."
+          # python scripts/export_schemas.py --out ../shared/schemas
+
+      - name: Upload schema artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-schemas
+          path: shared/schemas/
+
+  verify-frontend-can-parse:
+    name: Frontend parses golden fixtures
+    needs: generate-schemas
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+          cache: true
+
+      - name: Download schemas
+        uses: actions/download-artifact@v4
+        with:
+          name: api-schemas
+          path: ../shared/schemas
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run contract parser tests
+        run: |
+          echo "TODO: flutter test test/contract/ to be added in Week 2."
+          # flutter test test/contract/
