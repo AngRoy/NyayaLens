@@ -1,6 +1,6 @@
 # NyayaLens
 
-> **न्यायलेन्स** — *The Eye of Justice*
+> *The Eye of Justice*
 > An AI accountability operating system for automated hiring decisions.
 > Built for Solution Challenge 2026: Build with AI.
 
@@ -17,10 +17,10 @@ License: Apache 2.0 (see `LICENSE` and `NOTICE`).
 
 | Layer | Function | What NyayaLens does |
 |---|---|---|
-| **1 — Measure** | Detect | Gemini-powered schema understanding, 5 fairness metrics, intersectional views, LLM bias probing, conflict detection |
-| **2 — Mitigate** | Intervene | Reweighting, proxy-feature detection, LLM prompt hardening, before/after simulation — **always with human approval** |
-| **3 — Govern** | Accountability | Policy config, role-based access, sign-off workflow, immutable audit trail, regulatory mapping |
-| **4 — Recourse** | Justice | Applicant-facing explanations, appeal workflow, institutional loop closure |
+| **1 - Measure** | Detect | Gemini-powered schema understanding, 5 fairness metrics, intersectional views, LLM bias probing, conflict detection |
+| **2 - Mitigate** | Intervene | Reweighting, proxy-feature detection, LLM prompt hardening, before/after simulation — **always with human approval** |
+| **3 - Govern** | Accountability | Policy config, role-based access, sign-off workflow, immutable audit trail, regulatory mapping |
+| **4 - Recourse** | Justice | Applicant-facing explanations, appeal workflow, institutional loop closure |
 
 See `docs/system-design.md` for the full design (problem framing, competitive
 landscape, feature catalog, wireframes, regulatory alignment, and roadmap).
