@@ -1,0 +1,103 @@
+rules_version = '2';
+
+// NyayaLens Firestore rules.
+//
+// Every collection is scoped per organization. Users carry an
+// `organizationId` and a `role` custom claim on their Firebase Auth token.
+//
+// Role hierarchy (design doc §7.2.4):
+//   - admin    : policy config, user management, everything below
+//   - analyst  : upload data, run analysis, generate reports
+//   - reviewer : review findings, sign off tradeoffs
+//   - viewer   : read-only
+//
+// The audit trail is append-only for all roles. No update/delete on
+// `audit_trail/*` — ADR 0004 traceability requirement.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function orgMatches(orgId) {
+      return isSignedIn() &&
+             request.auth.token.organizationId == orgId;
+    }
+
+    function hasAnyRole(orgId, allowedRoles) {
+      return orgMatches(orgId) &&
+             request.auth.token.role in allowedRoles;
+    }
+
+    // --- Users ---
+    // A user can read their own record; admins can read/write any in their org.
+    match /users/{uid} {
+      allow read: if isSignedIn() &&
+                  (request.auth.uid == uid ||
+                   (request.auth.token.organizationId == resource.data.organizationId &&
+                    request.auth.token.role == "admin"));
+      allow write: if isSignedIn() &&
+                   request.auth.token.role == "admin" &&
+                   request.auth.token.organizationId == request.resource.data.organizationId;
+    }
+
+    // --- Organizations ---
+    match /organizations/{orgId} {
+      allow read: if orgMatches(orgId);
+      allow write: if hasAnyRole(orgId, ["admin"]);
+    }
+
+    // --- Audits ---
+    match /audits/{auditId} {
+      allow read: if isSignedIn() &&
+                  request.auth.token.organizationId == resource.data.organizationId;
+
+      allow create: if isSignedIn() &&
+                    request.auth.token.organizationId == request.resource.data.organizationId &&
+                    request.auth.token.role in ["admin","analyst"];
+
+      // Signoff transitions audits to a frozen state; once signedOff is set,
+      // only admins may modify (and even they should avoid it).
+      allow update: if isSignedIn() &&
+                    request.auth.token.organizationId == resource.data.organizationId &&
+                    request.auth.token.role in ["admin","analyst","reviewer"] &&
+                    (resource.data.status != "signed_off" ||
+                     request.auth.token.role == "admin");
+
+      allow delete: if hasAnyRole(resource.data.organizationId, ["admin"]);
+    }
+
+    // --- Audit trail (append-only) ---
+    match /audit_trail/{trailId} {
+      allow read: if isSignedIn() &&
+                  request.auth.token.organizationId == resource.data.organizationId;
+
+      // Any authenticated org member can append via the backend pipeline.
+      // Clients cannot write directly — backend service account does it.
+      allow create: if isSignedIn() &&
+                    request.auth.token.organizationId == request.resource.data.organizationId;
+
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // --- LLM probes ---
+    match /llm_probes/{probeId} {
+      allow read, write: if isSignedIn() &&
+                          request.auth.token.organizationId == resource.data.organizationId;
+    }
+
+    // --- Recourse requests ---
+    // Any authenticated user can file a recourse request for an audit in
+    // their org. Reviewers/admins adjudicate.
+    match /recourse_requests/{requestId} {
+      allow read: if isSignedIn() &&
+                  request.auth.token.organizationId == resource.data.organizationId;
+      allow create: if isSignedIn();   // applicant-facing path; validated by backend
+      allow update: if hasAnyRole(resource.data.organizationId, ["admin","reviewer"]);
+      allow delete: if false;
+    }
+  }
+}

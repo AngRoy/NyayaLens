@@ -1,0 +1,55 @@
+rules_version = '2';
+
+// NyayaLens Cloud Storage rules.
+//
+// Dataset uploads, generated reports, and export artifacts are scoped per
+// organization. All paths follow:
+//   datasets/{orgId}/{auditId}/...
+//   reports/{orgId}/{auditId}/...
+//   exports/{orgId}/{auditId}/...
+//
+// A user can read or write only if the user's Firebase Auth custom claim
+// `organizationId` matches the `orgId` in the path.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function orgMatches(orgId) {
+      return isSignedIn() &&
+             request.auth.token.organizationId == orgId;
+    }
+
+    function hasAnyRole(orgId, allowedRoles) {
+      return orgMatches(orgId) &&
+             request.auth.token.role in allowedRoles;
+    }
+
+    // --- Datasets ---
+    match /datasets/{orgId}/{auditId}/{allPaths=**} {
+      // Analysts and admins can upload and read their org's datasets.
+      allow read: if hasAnyRole(orgId, ["admin","analyst","reviewer"]);
+      allow write: if hasAnyRole(orgId, ["admin","analyst"]) &&
+                   request.resource.size < 100 * 1024 * 1024 &&           // 100MB cap
+                   request.resource.contentType.matches("(text|application)/.*");
+    }
+
+    // --- Generated reports ---
+    match /reports/{orgId}/{auditId}/{allPaths=**} {
+      allow read: if hasAnyRole(orgId, ["admin","analyst","reviewer","viewer"]);
+      // Only the backend (via service account) writes reports. We therefore
+      // deny client writes here — the signed URL pattern returns the bytes
+      // to the client without needing client write access.
+      allow write: if false;
+    }
+
+    // --- Exports (heatmap PNG, metrics JSON) ---
+    match /exports/{orgId}/{auditId}/{allPaths=**} {
+      allow read: if hasAnyRole(orgId, ["admin","analyst","reviewer","viewer"]);
+      allow write: if false;
+    }
+  }
+}

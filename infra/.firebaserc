@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "default": "nyayalens-dev",
+    "staging": "nyayalens-staging",
+    "production": "nyayalens-prod"
+  }
+}
