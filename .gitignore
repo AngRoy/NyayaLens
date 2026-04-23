@@ -65,13 +65,14 @@ frontend/.packages
 frontend/.pub-cache/
 frontend/.pub/
 frontend/build/
-frontend/pubspec.lock
+# frontend/pubspec.lock
 frontend/.metadata
 frontend/android/
 frontend/ios/
 frontend/linux/
 frontend/macos/
 frontend/windows/
+frontend/coverage/
 # We build web-first; platform folders are regenerated as needed.
 
 # Generated files (freezed, json_serializable)
