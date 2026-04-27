@@ -1,0 +1,25 @@
+# NyayaLens backend Docker context — keep image small.
+.venv/
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+tests/
+scripts/
+*.egg-info/
+build/
+dist/
+.git/
+.github/
+.idea/
+.vscode/
+.DS_Store
