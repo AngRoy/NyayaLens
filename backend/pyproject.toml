@@ -8,13 +8,12 @@ version = "0.1.0"
 description = "NyayaLens — AI accountability operating system for hiring fairness"
 authors = [{name = "Team Zenith"}]
 license = "Apache-2.0"
-license-files = ["../LICENSE"]
-readme = "../README.md"
+license-files = []
+readme = {text = "NyayaLens FastAPI backend package.", content-type = "text/markdown"}
 requires-python = ">=3.11"
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
-  "License :: OSI Approved :: Apache Software License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
@@ -114,9 +113,15 @@ plugins = ["pydantic.mypy"]
 module = [
   "presidio_analyzer.*",
   "firebase_admin.*",
+  "google",
+  "google.*",
   "google.cloud.*",
   "google.generativeai.*",
+  "pandas",
+  "pandas.*",
   "reportlab.*",
+  "sklearn",
+  "sklearn.*",
 ]
 ignore_missing_imports = true
 
@@ -136,6 +141,7 @@ addopts = [
 ]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 markers = [
   "slow: marks tests as slow (deselect with '-m \"not slow\"')",
   "integration: marks tests that require Firebase emulators",

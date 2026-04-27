@@ -72,7 +72,9 @@ def _imports_in(path: Path) -> list[str]:
     return imports
 
 
-@pytest.mark.parametrize("path", _collect_core_python_files(), ids=lambda p: str(p.relative_to(BACKEND_ROOT)))
+@pytest.mark.parametrize(
+    "path", _collect_core_python_files(), ids=lambda p: str(p.relative_to(BACKEND_ROOT))
+)
 def test_core_module_does_not_import_adapters_or_external_sdks(path: Path) -> None:
     """Every file under `core/` must not import a forbidden module."""
     for name in _imports_in(path):

@@ -22,7 +22,7 @@ class StorageClient(Protocol):
     async def upload(
         self,
         path: str,
-        content: BinaryIO,
+        content: BinaryIO | bytes,
         *,
         content_type: str | None = None,
     ) -> str:

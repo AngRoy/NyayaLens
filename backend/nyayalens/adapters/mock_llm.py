@@ -43,8 +43,8 @@ class MockLLMClient(LLMClient):
         audit_sink: AuditSink | None = None,
         backend_name: str = "mock-llm",
     ) -> None:
-        self._structured = dict(structured_fixtures or {})
-        self._text = dict(text_fixtures or {})
+        self._structured: dict[tuple[str, str], dict[str, Any]] = dict(structured_fixtures or {})
+        self._text: dict[tuple[str, str], str] = dict(text_fixtures or {})
         self._audit_sink = audit_sink
         self._backend_name = backend_name
         self.calls: list[tuple[str, LLMPayload]] = []
@@ -65,7 +65,7 @@ class MockLLMClient(LLMClient):
     async def generate_structured(
         self,
         payload: LLMPayload,
-        json_schema: dict[str, Any],  # noqa: ARG002 — validated via protocol
+        json_schema: dict[str, Any],
         *,
         audit_id: str | None = None,
     ) -> dict[str, Any]:
@@ -75,8 +75,7 @@ class MockLLMClient(LLMClient):
 
         if key not in self._structured:
             raise MockLLMClientError(
-                f"No structured fixture for {key}. "
-                f"Add one with MockLLMClient.add_structured()."
+                f"No structured fixture for {key}. Add one with MockLLMClient.add_structured()."
             )
 
         await self._emit_privacy_log(payload, audit_id=audit_id)
@@ -94,8 +93,7 @@ class MockLLMClient(LLMClient):
 
         if key not in self._text:
             raise MockLLMClientError(
-                f"No text fixture for {key}. "
-                f"Add one with MockLLMClient.add_text()."
+                f"No text fixture for {key}. Add one with MockLLMClient.add_text()."
             )
 
         await self._emit_privacy_log(payload, audit_id=audit_id)
@@ -116,9 +114,7 @@ class MockLLMClient(LLMClient):
                 f"{type(payload).__name__}. Construct a payload via PrivacyFilter."
             )
 
-    async def _emit_privacy_log(
-        self, payload: LLMPayload, *, audit_id: str | None
-    ) -> None:
+    async def _emit_privacy_log(self, payload: LLMPayload, *, audit_id: str | None) -> None:
         if self._audit_sink is None:
             return
         entry = PrivacyLogEntry(

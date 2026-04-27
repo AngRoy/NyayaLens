@@ -105,9 +105,9 @@ def test_dir_oracles(metric_oracles: dict[str, Any]) -> None:
         elif "group_values_approx" in expected:
             # Used for large fixtures where we approve to 1e-4.
             for group, rate in expected["group_values_approx"].items():
-                assert math.isclose(
-                    result.group_values[group], rate, abs_tol=1e-4
-                ), f"[{oracle['name']}] group {group} approx rate mismatch"
+                assert math.isclose(result.group_values[group], rate, abs_tol=1e-4), (
+                    f"[{oracle['name']}] group {group} approx rate mismatch"
+                )
 
         if "privileged" in expected:
             assert result.privileged == expected["privileged"], oracle["name"]
@@ -120,7 +120,7 @@ def test_dir_oracles(metric_oracles: dict[str, Any]) -> None:
 def test_dir_eeoc_80_percent_rule_exactly_on_threshold() -> None:
     """EEOC 80% rule: DIR=0.80 is the threshold. Our metric should return 0.80 exactly."""
     # Group A: 5/5 = 1.0, Group B: 4/5 = 0.80. DIR = 0.80/1.0 = 0.80
-    y_pred = [1, 1, 1, 1, 1] + [1, 1, 1, 1, 0]
+    y_pred = [1, 1, 1, 1, 1, 1, 1, 1, 1, 0]
     sensitive = ["A"] * 5 + ["B"] * 5
     result = disparate_impact_ratio(y_pred, sensitive)
     assert _approx(result.value, 0.80)
@@ -147,8 +147,7 @@ def test_edge_case_oracles(metric_oracles: dict[str, Any]) -> None:
         assert result.reliable == expected["reliable"], case["case"]
         if "reason_contains" in expected:
             assert expected["reason_contains"].lower() in result.reason.lower(), (
-                f"[{case['case']}] reason {result.reason!r} missing "
-                f"{expected['reason_contains']!r}"
+                f"[{case['case']}] reason {result.reason!r} missing {expected['reason_contains']!r}"
             )
 
 
@@ -198,7 +197,7 @@ def test_min_group_size_constant_matches_design_doc() -> None:
 
 def test_small_group_flag_triggers_unreliable_but_still_computes_value() -> None:
     """We don't hide the number; we attach a warning. Design doc wants both."""
-    y_pred = [1, 1, 0, 1] + [0, 1, 0, 0]
+    y_pred = [1, 1, 0, 1, 0, 1, 0, 0]
     sensitive = ["A"] * 4 + ["B"] * 4
     result = statistical_parity_difference(y_pred, sensitive)
     assert result.value is not None

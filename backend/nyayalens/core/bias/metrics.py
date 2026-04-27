@@ -24,11 +24,16 @@ test fixtures in backend/tests/unit/test_metrics.py.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Any, Literal, TypeAlias
 
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
+
+SeriesInput: TypeAlias = pd.Series | npt.NDArray[Any] | Sequence[object]
+FeatureInput: TypeAlias = pd.DataFrame | npt.NDArray[Any]
 
 # Minimum samples per demographic group for a metric to be considered reliable.
 # Below this threshold we return the metric with `reliable=False` and the UI
@@ -77,7 +82,7 @@ class MetricResult:
 # ---------------------------------------------------------------------------
 
 
-def _coerce_series(x: pd.Series | np.ndarray | list[object]) -> pd.Series:
+def _coerce_series(x: SeriesInput) -> pd.Series:
     """Normalise input to a pandas Series with a default integer index."""
     if isinstance(x, pd.Series):
         return x.reset_index(drop=True)
@@ -87,12 +92,13 @@ def _coerce_series(x: pd.Series | np.ndarray | list[object]) -> pd.Series:
 def _align(*series: pd.Series) -> tuple[pd.Series, ...]:
     """Drop rows where any input is NaN.
 
-    All fairness metrics require aligned, complete records. We drop incomplete
-    rows rather than imputing so the numbers stay exactly reproducible.
+    Inputs may share names (e.g. y_true and y_pred both called "Placed").
+    To prevent ``pd.concat`` from collapsing same-named columns, we rename
+    each input to ``__col_<i>`` before concat then return them in order.
     """
-    frame = pd.concat(series, axis=1)
-    frame = frame.dropna(how="any")
-    return tuple(frame[col] for col in frame.columns)
+    renamed = [s.rename(f"__col_{i}").reset_index(drop=True) for i, s in enumerate(series)]
+    frame = pd.concat(renamed, axis=1).dropna(how="any")
+    return tuple(frame[f"__col_{i}"].rename(series[i].name) for i in range(len(series)))
 
 
 def _group_rates(
@@ -104,7 +110,7 @@ def _group_rates(
     for group, mask in sensitive.groupby(sensitive, observed=False).groups.items():
         idx = sensitive.index.isin(mask)
         group_pred = y_pred[idx]
-        sizes[str(group)] = int(len(group_pred))
+        sizes[str(group)] = len(group_pred)
         if len(group_pred) == 0:
             rates[str(group)] = float("nan")
             continue
@@ -151,14 +157,14 @@ def _small_group_reason(sizes: dict[str, int]) -> str:
 
 
 def statistical_parity_difference(
-    y_pred: pd.Series | np.ndarray | list[object],
-    sensitive: pd.Series | np.ndarray | list[object],
+    y_pred: SeriesInput,
+    sensitive: SeriesInput,
     *,
     positive_label: object = 1,
 ) -> MetricResult:
     """Difference in positive-outcome rate between unprivileged and privileged groups.
 
-    ``SPD = P(Ŷ=1 | D=unprivileged) − P(Ŷ=1 | D=privileged)``
+    ``SPD = P(y_hat=1 | D=unprivileged) - P(y_hat=1 | D=privileged)``
 
     SPD of 0.0 means both groups receive the positive outcome at the same
     rate. Negative values mean the unprivileged group is worse off. Design
@@ -218,8 +224,8 @@ def statistical_parity_difference(
 
 
 def disparate_impact_ratio(
-    y_pred: pd.Series | np.ndarray | list[object],
-    sensitive: pd.Series | np.ndarray | list[object],
+    y_pred: SeriesInput,
+    sensitive: SeriesInput,
     *,
     positive_label: object = 1,
 ) -> MetricResult:
@@ -284,13 +290,247 @@ def disparate_impact_ratio(
     )
 
 
-# EOD, Consistency, Calibration land in later commits — see ADR 0002.
-# The registry in core.bias.registry picks them up once implemented.
+def equal_opportunity_difference(
+    y_true: SeriesInput,
+    y_pred: SeriesInput,
+    sensitive: SeriesInput,
+    *,
+    positive_label: object = 1,
+) -> MetricResult:
+    """Difference in true-positive rates between unprivileged and privileged groups.
+
+    ``EOD = TPR_unprivileged - TPR_privileged`` where ``TPR = TP / (TP + FN)``.
+
+    EOD of 0.0 means qualified candidates from both groups are recognised at
+    equal rates. Negative values mean the unprivileged group's qualified
+    candidates are more likely to be missed.
+
+    A group with no positive ``y_true`` rows has an undefined TPR; it is
+    excluded from the privileged/unprivileged pick. If fewer than two groups
+    survive that filter the metric is unavailable.
+    """
+    yt, yp, s = _align(_coerce_series(y_true), _coerce_series(y_pred), _coerce_series(sensitive))
+    tprs: dict[str, float] = {}
+    sizes: dict[str, int] = {}
+    for group, idx in s.groupby(s, observed=False).groups.items():
+        in_group = s.index.isin(idx)
+        positives = yt[in_group] == positive_label
+        sizes[str(group)] = int(in_group.sum())
+        if positives.sum() == 0:
+            tprs[str(group)] = float("nan")
+            continue
+        tp = ((yp[in_group] == positive_label) & positives).sum()
+        tprs[str(group)] = float(tp) / float(positives.sum())
+
+    privileged, unprivileged = _pick_privileged_unprivileged(tprs)
+    small_reason = _small_group_reason(sizes)
+
+    if privileged is None or unprivileged is None:
+        return MetricResult(
+            metric="eod",
+            value=None,
+            group_values=tprs,
+            sample_sizes=sizes,
+            threshold=0.10,
+            threshold_direction="abs",
+            reliable=False,
+            reason="Fewer than two groups had any positive ground-truth rows.",
+        )
+
+    value = tprs[unprivileged] - tprs[privileged]
+    return MetricResult(
+        metric="eod",
+        value=value,
+        group_values=tprs,
+        privileged=privileged,
+        unprivileged=unprivileged,
+        sample_sizes=sizes,
+        threshold=0.10,
+        threshold_direction="abs",
+        reliable=not small_reason,
+        reason=small_reason,
+    )
+
+
+def consistency_score(
+    features: FeatureInput,
+    y_pred: SeriesInput,
+    *,
+    n_neighbors: int = 5,
+) -> MetricResult:
+    """How similarly similar individuals are treated.
+
+    Implements Zemel et al. 2013:
+        ``C = 1 - (1/n) sum |y_hat_i - mean(y_hat_kNN(i))|``
+
+    Range: 0 (worst) to 1 (best). A single attribute-agnostic number — there
+    is no privileged/unprivileged group here.
+
+    Reference: AIF360 ``binary_label_dataset_metric.py:124``.
+    """
+    from sklearn.neighbors import NearestNeighbors
+
+    if isinstance(features, pd.DataFrame):
+        x = features.select_dtypes(include=[np.number]).to_numpy(dtype=float)
+    else:
+        x = np.asarray(features, dtype=float)
+
+    yp = _coerce_series(y_pred).to_numpy()
+    if x.shape[0] != yp.shape[0]:
+        raise ValueError(f"features ({x.shape[0]}) and y_pred ({yp.shape[0]}) length mismatch")
+
+    n = x.shape[0]
+    if n < 2 or x.shape[1] == 0:
+        return MetricResult(
+            metric="consistency",
+            value=None,
+            sample_sizes={"_total": int(n)},
+            threshold=0.80,
+            threshold_direction="below",
+            reliable=False,
+            reason="Consistency requires ≥2 rows and ≥1 numeric feature column.",
+        )
+
+    k = min(n_neighbors + 1, n)  # +1 because the row itself is its own NN
+    nn = NearestNeighbors(n_neighbors=k)
+    nn.fit(x)
+    _, indices = nn.kneighbors(x)
+
+    yp_numeric = pd.to_numeric(pd.Series(yp), errors="coerce").to_numpy()
+    if np.isnan(yp_numeric).any():
+        return MetricResult(
+            metric="consistency",
+            value=None,
+            sample_sizes={"_total": int(n)},
+            threshold=0.80,
+            threshold_direction="below",
+            reliable=False,
+            reason="Consistency requires numeric y_pred (cannot coerce categorical).",
+        )
+
+    neighbour_means = np.array(
+        [yp_numeric[idx[1:]].mean() for idx in indices]  # exclude self
+    )
+    diffs = np.abs(yp_numeric - neighbour_means)
+    score = float(1.0 - diffs.mean())
+    reliable = n >= MIN_GROUP_SIZE
+    reason = "" if reliable else f"Total sample size {n} below {MIN_GROUP_SIZE}."
+
+    return MetricResult(
+        metric="consistency",
+        value=score,
+        sample_sizes={"_total": int(n)},
+        threshold=0.80,
+        threshold_direction="below",
+        reliable=reliable,
+        reason=reason,
+    )
+
+
+def calibration_difference(
+    y_true: SeriesInput,
+    y_prob: SeriesInput,
+    sensitive: SeriesInput,
+    *,
+    n_bins: int = 10,
+    positive_label: object = 1,
+) -> MetricResult:
+    """Difference in expected-calibration-error (ECE) between groups.
+
+    For each group we compute ECE — the weighted mean absolute gap between
+    the predicted probability of the positive class and the empirical
+    positive rate, across ``n_bins`` equal-width bins. We return the
+    difference between the worst and best group ECE.
+
+    Smaller is better. Threshold reference: 0.05 per design doc §6.3 F3.
+
+    Requires probability scores in ``y_prob`` (continuous in [0, 1]); falls
+    back to unavailable if any group has fewer than ``n_bins`` rows.
+    """
+    yt, yp, s = _align(_coerce_series(y_true), _coerce_series(y_prob), _coerce_series(sensitive))
+    yp_num = pd.to_numeric(yp, errors="coerce")
+    if yp_num.isna().any():
+        return MetricResult(
+            metric="calibration",
+            value=None,
+            sample_sizes={},
+            threshold=0.05,
+            threshold_direction="below",
+            reliable=False,
+            reason="Calibration requires numeric probability scores in y_prob.",
+        )
+    if yp_num.min() < 0 or yp_num.max() > 1:
+        return MetricResult(
+            metric="calibration",
+            value=None,
+            sample_sizes={},
+            threshold=0.05,
+            threshold_direction="below",
+            reliable=False,
+            reason="y_prob values must lie in [0, 1].",
+        )
+
+    bins = np.linspace(0.0, 1.0, n_bins + 1)
+    eces: dict[str, float] = {}
+    sizes: dict[str, int] = {}
+    for group, idx in s.groupby(s, observed=False).groups.items():
+        in_group = s.index.isin(idx)
+        sizes[str(group)] = int(in_group.sum())
+        if in_group.sum() < n_bins:
+            eces[str(group)] = float("nan")
+            continue
+        gp = yp_num[in_group].to_numpy()
+        gt = (yt[in_group] == positive_label).to_numpy().astype(float)
+        ece_total = 0.0
+        n_group = float(gp.shape[0])
+        for i in range(n_bins):
+            lo, hi = bins[i], bins[i + 1]
+            mask = (gp >= lo) & (gp < hi if i < n_bins - 1 else gp <= hi)
+            if mask.sum() == 0:
+                continue
+            avg_conf = float(gp[mask].mean())
+            avg_pos = float(gt[mask].mean())
+            ece_total += (mask.sum() / n_group) * abs(avg_pos - avg_conf)
+        eces[str(group)] = ece_total
+
+    finite = {g: e for g, e in eces.items() if not np.isnan(e)}
+    if len(finite) < 2:
+        return MetricResult(
+            metric="calibration",
+            value=None,
+            group_values=eces,
+            sample_sizes=sizes,
+            threshold=0.05,
+            threshold_direction="below",
+            reliable=False,
+            reason=(f"Need ≥2 groups with at least {n_bins} samples each to compute calibration."),
+        )
+
+    privileged = min(finite, key=lambda g: finite[g])  # best calibrated
+    unprivileged = max(finite, key=lambda g: finite[g])  # worst calibrated
+    value = finite[unprivileged] - finite[privileged]
+    small_reason = _small_group_reason(sizes)
+
+    return MetricResult(
+        metric="calibration",
+        value=value,
+        group_values=eces,
+        privileged=privileged,
+        unprivileged=unprivileged,
+        sample_sizes=sizes,
+        threshold=0.05,
+        threshold_direction="below",
+        reliable=not small_reason,
+        reason=small_reason,
+    )
 
 
 __all__ = [
     "MIN_GROUP_SIZE",
     "MetricResult",
+    "calibration_difference",
+    "consistency_score",
     "disparate_impact_ratio",
+    "equal_opportunity_difference",
     "statistical_parity_difference",
 ]

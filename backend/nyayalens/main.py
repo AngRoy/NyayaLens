@@ -5,8 +5,8 @@ Route modules register themselves through explicit `include_router` calls —
 no implicit discovery.
 """
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -61,11 +61,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "emulators": "on" if cfg.is_using_emulators else "off",
         }
 
-    # Route modules will be included here as they land in Week 1-2:
-    # from nyayalens.api import datasets, audits, probes, recourse, reports
-    # app.include_router(datasets.router, prefix="/api/v1")
-    # app.include_router(audits.router,   prefix="/api/v1")
-    # ...
+    from nyayalens.api.routes import router as api_router
+
+    app.include_router(api_router, prefix="/api/v1")
 
     return app
 

@@ -16,7 +16,6 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 AuditAction = Literal[
     "dataset_uploaded",
     "schema_detected",
