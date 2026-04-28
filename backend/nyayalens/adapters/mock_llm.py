@@ -42,11 +42,13 @@ class MockLLMClient(LLMClient):
         *,
         audit_sink: AuditSink | None = None,
         backend_name: str = "mock-llm",
+        organization_id: str = "",
     ) -> None:
         self._structured: dict[tuple[str, str], dict[str, Any]] = dict(structured_fixtures or {})
         self._text: dict[tuple[str, str], str] = dict(text_fixtures or {})
         self._audit_sink = audit_sink
         self._backend_name = backend_name
+        self._organization_id = organization_id
         self.calls: list[tuple[str, LLMPayload]] = []
         """Record of every call — tests assert on this."""
 
@@ -124,11 +126,13 @@ class MockLLMClient(LLMClient):
             model_backend=self._backend_name,
             mode=payload.mode,
         )
-        # Privacy logs are audit events too.
+        # Privacy logs are audit events too. The organization_id is the one
+        # supplied at adapter construction time; production callers wire
+        # this from `Settings` / per-org adapter pools.
         await self._audit_sink.write(
             AuditEvent(
                 audit_id=audit_id,
-                organization_id="",  # filled in by caller's middleware in real adapters
+                organization_id=self._organization_id,
                 action="privacy_log",
                 user_id="system",
                 user_name="mock_llm",
