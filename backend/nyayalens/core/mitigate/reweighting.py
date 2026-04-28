@@ -116,9 +116,7 @@ def _weighted_selection_rates(
         if not mask.any():
             continue
         denom = float(w_arr[mask].sum())
-        rates[str(group)] = (
-            float((w_arr[mask] * y_pos[mask]).sum() / denom) if denom > 0 else 0.0
-        )
+        rates[str(group)] = float((w_arr[mask] * y_pos[mask]).sum() / denom) if denom > 0 else 0.0
     return rates
 
 
