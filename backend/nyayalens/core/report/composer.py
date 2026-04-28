@@ -90,11 +90,19 @@ def build_audit_report(
     sign_off: dict[str, Any] | None,
 ) -> AuditReportData:
     """Compose the section list for the PDF."""
+    section_number = 1
+
+    def heading(title: str) -> str:
+        nonlocal section_number
+        value = f"{section_number}. {title}"
+        section_number += 1
+        return value
+
     # ----- Part A: Audit findings -----
     part_a: list[AuditSection] = []
     part_a.append(
         AuditSection(
-            heading="1. Executive Summary",
+            heading=heading("Executive Summary"),
             body=[
                 f"Audit '{audit_title}' was conducted on {provenance_label} "
                 f"({provenance_kind} data) within the {domain} domain.",
@@ -105,7 +113,7 @@ def build_audit_report(
     )
     part_a.append(
         AuditSection(
-            heading="2. Dataset Overview",
+            heading=heading("Dataset Overview"),
             body=[
                 f"Outcome column: {schema_summary.get('outcome_column', 'n/a')}",
                 f"Feature columns: {len(schema_summary.get('feature_columns', []))}",
@@ -116,7 +124,7 @@ def build_audit_report(
     )
     part_a.append(
         AuditSection(
-            heading="3. Fairness Metrics",
+            heading=heading("Fairness Metrics"),
             body=[
                 "Each metric is reported with the reference threshold and the "
                 "privileged/unprivileged groups on this dataset."
@@ -127,7 +135,7 @@ def build_audit_report(
     )
     part_a.append(
         AuditSection(
-            heading="4. Per-Metric Explanations",
+            heading=heading("Per-Metric Explanations"),
             body=[
                 f"{e.metric} on {e.attribute}: {e.summary}\n  {e.interpretation}"
                 for e in explanations
@@ -136,7 +144,7 @@ def build_audit_report(
     )
     part_a.append(
         AuditSection(
-            heading="5. Metric-Conflict Analysis",
+            heading=heading("Metric-Conflict Analysis"),
             body=(
                 [
                     f"{c.metric_a} vs {c.metric_b}: {c.description}\n  {c.recommendation}"
@@ -148,7 +156,7 @@ def build_audit_report(
     )
     part_a.append(
         AuditSection(
-            heading="6. Proxy-Feature Flags",
+            heading=heading("Proxy-Feature Flags"),
             body=(
                 [
                     f"{f.feature} → {f.sensitive_attribute} via {f.method} at "
@@ -174,7 +182,7 @@ def build_audit_report(
             )
         part_b.append(
             AuditSection(
-                heading="7. LLM Demographic Perturbation",
+                heading=heading("LLM Demographic Perturbation"),
                 body=[
                     f"Role: {perturbation_probe.role}",
                     f"Maximum score difference across variants: "
@@ -187,7 +195,7 @@ def build_audit_report(
     if jd_scan is not None:
         part_b.append(
             AuditSection(
-                heading="8. Job-Description Bias Scan",
+                heading=heading("Job-Description Bias Scan"),
                 body=[
                     f"Inclusivity score: {jd_scan.inclusivity_score:.2f}",
                     "Flagged phrases: "
@@ -196,18 +204,6 @@ def build_audit_report(
                 ],
             )
         )
-    if not part_b:
-        part_b.append(
-            AuditSection(
-                heading="7. Probe Findings",
-                body=[
-                    "No LLM Bias Probe was run for this audit. "
-                    "Probe Mode and Audit Mode are reported separately by design "
-                    "(see methodology appendix)."
-                ],
-            )
-        )
-
     # ----- Part C: Governance record -----
     part_c: list[AuditSection] = []
     if remediation is not None:
@@ -215,7 +211,7 @@ def build_audit_report(
         dir_after = "n/a" if remediation.dir_after is None else f"{remediation.dir_after:.4f}"
         part_c.append(
             AuditSection(
-                heading="9. Mitigation",
+                heading=heading("Mitigation"),
                 body=[
                     "Strategy: reweighting (Kamiran/Calders 2012).",
                     f"DIR before mitigation: {dir_before}",
@@ -227,7 +223,7 @@ def build_audit_report(
     else:
         part_c.append(
             AuditSection(
-                heading="9. Mitigation",
+                heading=heading("Mitigation"),
                 body=["No mitigation was applied for this audit."],
             )
         )
@@ -235,7 +231,7 @@ def build_audit_report(
     if sign_off:
         part_c.append(
             AuditSection(
-                heading="10. Human Accountability",
+                heading=heading("Human Accountability"),
                 body=[
                     f"Reviewer: {sign_off.get('reviewer_name', '?')} "
                     f"({sign_off.get('reviewer_role', '?')})",
@@ -247,7 +243,7 @@ def build_audit_report(
     else:
         part_c.append(
             AuditSection(
-                heading="10. Human Accountability",
+                heading=heading("Human Accountability"),
                 body=["This audit has not yet been signed off."],
             )
         )
@@ -255,7 +251,7 @@ def build_audit_report(
     if recourse is not None:
         part_c.append(
             AuditSection(
-                heading="11. Applicant Recourse",
+                heading=heading("Applicant Recourse"),
                 body=[
                     "Aggregate statistics provided to applicants:",
                     *[f"  - {k}: {v}" for k, v in recourse.aggregate_statistics.items()],
@@ -267,7 +263,7 @@ def build_audit_report(
 
     part_c.append(
         AuditSection(
-            heading="12. Regulatory Alignment",
+            heading=heading("Regulatory Alignment"),
             body=[
                 "EU AI Act Article 10 — bias testing.",
                 "EU AI Act Article 14 — human oversight.",
@@ -286,6 +282,9 @@ def build_audit_report(
                 "attribution.",
                 "Privacy: all LLM payloads pass through the PrivacyFilter (typed "
                 "envelopes; raw row data never reaches the LLM in Audit Mode).",
+                "Probe Mode: LLM scenario probes are reported only when a probe "
+                "run is part of the audit scope. Audit Mode findings and Probe "
+                "Mode findings are never mixed.",
                 "Mitigation: Kamiran/Calders 2012 reweighting; before/after rates "
                 "computed directly from the empirical data.",
                 "Grounding: every digit in a Gemini explanation is verified against "

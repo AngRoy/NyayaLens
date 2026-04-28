@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:nyayalens_client/shared/api/api_client.dart';
+import 'package:nyayalens_client/shared/widgets/brand_logo.dart';
 import 'package:nyayalens_client/shared/widgets/nyaya_surface.dart';
 
 class NyayaAppShell extends StatelessWidget {
@@ -70,7 +71,7 @@ class NyayaAppShell extends StatelessWidget {
         return Scaffold(
           appBar: compact
               ? AppBar(
-                  title: const Text('NyayaLens'),
+                  title: const NyayaBrandLockup(),
                   actions: [
                     IconButton(
                       tooltip: 'New audit',
@@ -208,45 +209,8 @@ class _AppNavigation extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
-            child: Row(
-              children: [
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: scheme.primary,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const SizedBox(
-                    width: 38,
-                    height: 38,
-                    child: Icon(
-                      Icons.balance,
-                      size: 22,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'NyayaLens',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w900,
-                            ),
-                      ),
-                      Text(
-                        'Fairness audit console',
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            child: const NyayaBrandLockup(
+              subtitle: 'Fairness audit console',
             ),
           ),
           const Divider(),

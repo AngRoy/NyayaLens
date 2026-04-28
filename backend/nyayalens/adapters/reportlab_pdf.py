@@ -139,11 +139,11 @@ def render_audit_report(data: AuditReportData) -> bytes:
     for section in data.part_a_audit:
         story.extend(_section_to_flowables(section, styles))
 
-    story.append(PageBreak())
-
-    story.append(Paragraph("Part B — Probe Findings", styles["title"]))
-    for section in data.part_b_probe:
-        story.extend(_section_to_flowables(section, styles))
+    if data.part_b_probe:
+        story.append(PageBreak())
+        story.append(Paragraph("Part B - Probe Findings", styles["title"]))
+        for section in data.part_b_probe:
+            story.extend(_section_to_flowables(section, styles))
 
     story.append(PageBreak())
 
