@@ -15,6 +15,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+
 from pydantic import BaseModel
 
 from nyayalens.models import api as api_models
