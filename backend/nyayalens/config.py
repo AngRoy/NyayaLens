@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8000
     cors_allowed_origins: str = "http://localhost:3000,http://localhost:5000"
+    cors_allowed_origin_regex: str = ""
 
     # -- Feature flags --
     enable_response_cache: bool = True
@@ -79,6 +80,15 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip()]
+
+    @property
+    def cors_origin_regex(self) -> str | None:
+        configured = self.cors_allowed_origin_regex.strip()
+        if configured:
+            return configured
+        if self.is_production:
+            return None
+        return r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
 
     @property
     def is_production(self) -> bool:
