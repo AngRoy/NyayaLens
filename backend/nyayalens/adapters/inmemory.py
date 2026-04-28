@@ -77,9 +77,18 @@ class InMemoryStorage(StorageClient):
 
 # ---- PII recognizer (stdlib only — no Presidio) -------------------------
 
+# Phone matcher accepts:
+#   - Indian bare 10-digit starting with 6-9 (`9876543210`)
+#   - Indian E.164 with optional space/hyphen (`+91 9876543210`)
+#   - Generic international E.164: `+CC` plus 7-14 digits with optional
+#     internal spaces/hyphens (e.g. `+1 415 555 0123`, `+44 20 7946 0958`,
+#     `+33 1 42 86 82 00`).
+# 7-digit minimum body avoids matching short numeric spans (pins, years).
+_PHONE_RE = re.compile(r"(?:\+\d{1,3}[-\s]?(?:\d[-\s]?){6,13}\d|(?:\+?91[-\s]?)?[6-9]\d{9})")
+
 _PII_PATTERNS: dict[str, re.Pattern[str]] = {
     "EMAIL_ADDRESS": re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+"),
-    "PHONE_NUMBER": re.compile(r"(?:\+?91[-\s]?)?[6-9]\d{9}"),
+    "PHONE_NUMBER": _PHONE_RE,
     "IN_AADHAAR": re.compile(r"\b\d{4}\s?\d{4}\s?\d{4}\b"),
     "IN_PAN": re.compile(r"\b[A-Z]{5}\d{4}[A-Z]\b"),
     "IN_ROLL_NO": re.compile(r"\b\d{2}[A-Z]{2,3}\d{3,4}\b"),
