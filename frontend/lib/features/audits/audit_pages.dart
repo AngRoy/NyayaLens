@@ -371,6 +371,13 @@ class _WorkspaceActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (audit.summary.mode == 'probe') {
+      return const StatusBadge(
+        label: 'Probe mode · lifecycle actions disabled',
+        tone: BadgeTone.info,
+        icon: Icons.science_outlined,
+      );
+    }
     return Wrap(
       spacing: 8,
       runSpacing: 8,

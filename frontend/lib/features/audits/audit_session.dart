@@ -198,6 +198,10 @@ String friendlyApiError(Object error) {
   if (error is ApiException) {
     final status = error.status;
     if (status == 404) return 'That audit is not available in the local backend.';
+    if (status == 409 && error.message.toLowerCase().contains('probe')) {
+      return 'This audit is in probe mode. Lifecycle actions like analyze, '
+          'remediate, sign-off, and report are reserved for full audit mode.';
+    }
     if (status == 502 || status == 503) {
       return 'The analysis service is temporarily unavailable. Retry after the backend settles.';
     }
