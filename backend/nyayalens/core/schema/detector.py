@@ -16,6 +16,9 @@ domain prompt with the privacy-filtered payload from `core/schema/pii.py`.
 
 from __future__ import annotations
 
+import asyncio
+import logging
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -61,6 +64,45 @@ GEMINI_SCHEMA_JSON_SCHEMA: dict[str, Any] = {
 }
 
 CONFIDENCE_REVIEW_THRESHOLD: float = 0.60
+DEFAULT_SCHEMA_LLM_TIMEOUT_SECONDS: float = 20.0
+
+log = logging.getLogger(__name__)
+
+_SENSITIVE_HINTS: dict[str, tuple[str, ...]] = {
+    "gender": ("gender", "sex"),
+    "caste": ("caste", "category", "reservation", "community"),
+    "race": ("race", "ethnicity"),
+    "religion": ("religion", "faith"),
+    "age": ("age", "dob", "birth"),
+    "disability": ("disability", "disabled", "pwd"),
+}
+_OUTCOME_HINTS = (
+    "placed",
+    "selected",
+    "hired",
+    "accepted",
+    "approved",
+    "admitted",
+    "pass",
+    "outcome",
+    "decision",
+    "target",
+    "label",
+)
+_SCORE_HINTS = ("score", "probability", "prob", "confidence", "rank")
+_POSITIVE_TEXT_VALUES = (
+    "1",
+    "true",
+    "yes",
+    "y",
+    "placed",
+    "selected",
+    "hired",
+    "accepted",
+    "approved",
+    "admitted",
+    "pass",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,11 +142,15 @@ class SchemaDetector:
         *,
         prompt_template_id: str = "schema.detect.v1",
         purpose: str = "schema_detection",
+        llm_timeout_seconds: float = DEFAULT_SCHEMA_LLM_TIMEOUT_SECONDS,
+        fallback_on_error: bool = True,
     ) -> None:
         self._llm = llm
         self._privacy = privacy_filter
         self._prompt_id = prompt_template_id
         self._purpose = purpose
+        self._llm_timeout_seconds = llm_timeout_seconds
+        self._fallback_on_error = fallback_on_error
 
     async def detect(
         self,
@@ -124,73 +170,193 @@ class SchemaDetector:
             narrative_context=narrative_context,
         )
 
-        response = await self._llm.generate_structured(
-            outcome.payload,
-            GEMINI_SCHEMA_JSON_SCHEMA,
-            audit_id=audit_id,
+        try:
+            response = await asyncio.wait_for(
+                self._llm.generate_structured(
+                    outcome.payload,
+                    GEMINI_SCHEMA_JSON_SCHEMA,
+                    audit_id=audit_id,
+                ),
+                timeout=self._llm_timeout_seconds,
+            )
+        except Exception as exc:
+            if not self._fallback_on_error:
+                raise
+            log.info("Schema LLM detection failed; using local fallback: %s", exc)
+            response = _local_schema_response(dataset, outcome, fallback_reason=str(exc))
+
+        result = _result_from_response(response, outcome)
+        if self._fallback_on_error and (result.outcome is None or not result.sensitive_attributes):
+            response = _local_schema_response(
+                dataset,
+                outcome,
+                fallback_reason="LLM response missed required schema fields.",
+            )
+            return _result_from_response(response, outcome)
+        return result
+
+
+def _normalise_name(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", name.strip().lower()).strip("_")
+
+
+def _hint_match(name: str, hints: tuple[str, ...]) -> bool:
+    normalised = _normalise_name(name)
+    return any(hint in normalised for hint in hints)
+
+
+def _sensitive_category(name: str) -> str | None:
+    for category, hints in _SENSITIVE_HINTS.items():
+        if _hint_match(name, hints):
+            return category
+    return None
+
+
+def _positive_value(values: list[Any]) -> Any:
+    for raw in values:
+        text = str(raw).strip().lower()
+        if text in _POSITIVE_TEXT_VALUES:
+            if hasattr(raw, "item"):
+                return raw.item()
+            return raw
+    return 1
+
+
+def _local_schema_response(
+    dataset: ParsedDataset,
+    privacy: PrivacyOutcome,
+    *,
+    fallback_reason: str,
+) -> dict[str, Any]:
+    pii_columns = {v.column for v in privacy.verdicts if v.is_pii}
+
+    sensitive_attributes: list[dict[str, Any]] = []
+    for col in dataset.columns:
+        if col.name in pii_columns:
+            continue
+        category = _sensitive_category(col.name)
+        if category is None:
+            continue
+        sensitive_attributes.append(
+            {
+                "column": col.name,
+                "category": category,
+                "confidence": 0.90,
+                "rationale": f"Column name matched local {category} schema hints.",
+            }
         )
 
-        sens_raw = response.get("sensitive_attributes", []) or []
-        sensitive: list[SensitiveAttrDetection] = []
-        for s in sens_raw:
-            try:
-                sensitive.append(
-                    SensitiveAttrDetection(
-                        column=str(s["column"]),
-                        category=str(s.get("category", "unknown")),
-                        confidence=float(s.get("confidence", 0.0)),
-                        rationale=str(s.get("rationale", "")),
-                    )
+    outcome_column: dict[str, Any] | None = None
+    for col in dataset.columns:
+        if col.name in pii_columns:
+            continue
+        if not _hint_match(col.name, _OUTCOME_HINTS):
+            continue
+        values = dataset.df[col.name].dropna().unique().tolist()
+        outcome_column = {
+            "column": col.name,
+            "positive_value": _positive_value(values),
+            "confidence": 0.88,
+        }
+        break
+
+    score_column: str | None = None
+    for col in dataset.columns:
+        if col.name in pii_columns or col.dtype != "numeric":
+            continue
+        if _hint_match(col.name, _SCORE_HINTS):
+            score_column = col.name
+            break
+
+    excluded = set(pii_columns)
+    if outcome_column is not None:
+        excluded.add(str(outcome_column["column"]))
+    if score_column is not None:
+        excluded.add(score_column)
+
+    feature_columns = [
+        c.name
+        for c in dataset.columns
+        if c.name not in excluded and c.dtype in ("numeric", "categorical", "boolean")
+    ]
+
+    return {
+        "_source": "local_heuristic_fallback",
+        "_fallback_reason": fallback_reason,
+        "sensitive_attributes": sensitive_attributes,
+        "outcome_column": outcome_column,
+        "feature_columns": feature_columns,
+        "identifier_columns": sorted(pii_columns),
+        "score_column": score_column,
+    }
+
+
+def _result_from_response(
+    response: dict[str, Any],
+    privacy: PrivacyOutcome,
+) -> SchemaDetectionResult:
+    sens_raw = response.get("sensitive_attributes", []) or []
+    sensitive: list[SensitiveAttrDetection] = []
+    for s in sens_raw:
+        try:
+            sensitive.append(
+                SensitiveAttrDetection(
+                    column=str(s["column"]),
+                    category=str(s.get("category", "unknown")),
+                    confidence=float(s.get("confidence", 0.0)),
+                    rationale=str(s.get("rationale", "")),
                 )
-            except (KeyError, TypeError, ValueError):
-                continue
+            )
+        except (KeyError, TypeError, ValueError):
+            continue
 
-        outcome_raw = response.get("outcome_column")
-        outcome_det: OutcomeDetection | None = None
-        if isinstance(outcome_raw, dict) and "column" in outcome_raw:
-            try:
-                outcome_det = OutcomeDetection(
-                    column=str(outcome_raw["column"]),
-                    positive_value=outcome_raw.get("positive_value", 1),
-                    confidence=float(outcome_raw.get("confidence", 0.0)),
-                )
-            except (TypeError, ValueError):
-                outcome_det = None
+    outcome_raw = response.get("outcome_column")
+    outcome_det: OutcomeDetection | None = None
+    if isinstance(outcome_raw, dict) and "column" in outcome_raw:
+        try:
+            outcome_det = OutcomeDetection(
+                column=str(outcome_raw["column"]),
+                positive_value=outcome_raw.get("positive_value", 1),
+                confidence=float(outcome_raw.get("confidence", 0.0)),
+            )
+        except (TypeError, ValueError):
+            outcome_det = None
 
-        feature_columns = [str(c) for c in response.get("feature_columns", []) if c]
-        identifier_columns = [str(c) for c in response.get("identifier_columns", []) if c]
-        score_column_raw = response.get("score_column")
-        score_column = str(score_column_raw) if score_column_raw else None
+    feature_columns = [str(c) for c in response.get("feature_columns", []) if c]
+    identifier_columns = [str(c) for c in response.get("identifier_columns", []) if c]
+    score_column_raw = response.get("score_column")
+    score_column = str(score_column_raw) if score_column_raw else None
 
-        # Augment identifier_columns with PII verdicts so the bias engine
-        # never sees a column the privacy layer flagged as PII.
-        pii_columns = {v.column for v in outcome.verdicts if v.is_pii}
-        for c in pii_columns:
-            if c not in identifier_columns:
-                identifier_columns.append(c)
-        feature_columns = [c for c in feature_columns if c not in pii_columns]
+    # Augment identifier_columns with PII verdicts so the bias engine
+    # never sees a column the privacy layer flagged as PII.
+    pii_columns = {v.column for v in privacy.verdicts if v.is_pii}
+    for c in pii_columns:
+        if c not in identifier_columns:
+            identifier_columns.append(c)
+    feature_columns = [c for c in feature_columns if c not in pii_columns]
 
-        confidences = [s.confidence for s in sensitive]
-        if outcome_det is not None:
-            confidences.append(outcome_det.confidence)
-        needs_review = bool(
-            not confidences or any(c < CONFIDENCE_REVIEW_THRESHOLD for c in confidences)
-        )
+    confidences = [s.confidence for s in sensitive]
+    if outcome_det is not None:
+        confidences.append(outcome_det.confidence)
+    needs_review = bool(
+        not confidences or any(c < CONFIDENCE_REVIEW_THRESHOLD for c in confidences)
+    )
 
-        return SchemaDetectionResult(
-            sensitive_attributes=sensitive,
-            outcome=outcome_det,
-            feature_columns=feature_columns,
-            identifier_columns=identifier_columns,
-            score_column=score_column,
-            needs_review=needs_review,
-            privacy=outcome,
-            raw_response=response,
-        )
+    return SchemaDetectionResult(
+        sensitive_attributes=sensitive,
+        outcome=outcome_det,
+        feature_columns=feature_columns,
+        identifier_columns=identifier_columns,
+        score_column=score_column,
+        needs_review=needs_review,
+        privacy=privacy,
+        raw_response=response,
+    )
 
 
 __all__ = [
     "CONFIDENCE_REVIEW_THRESHOLD",
+    "DEFAULT_SCHEMA_LLM_TIMEOUT_SECONDS",
     "GEMINI_SCHEMA_JSON_SCHEMA",
     "OutcomeDetection",
     "SchemaDetectionResult",

@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     port: int = 8000
     cors_allowed_origins: str = "http://localhost:3000,http://localhost:5000"
     cors_allowed_origin_regex: str = ""
+    schema_detection_llm_timeout_seconds: float = 20.0
 
     # -- Feature flags --
     enable_response_cache: bool = True
