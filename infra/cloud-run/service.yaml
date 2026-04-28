@@ -1,15 +1,16 @@
-# NyayaLens API — Cloud Run service manifest.
+# NyayaLens API, Cloud Run service manifest (canonical reference).
 #
-# Deploy (image must be SHA-pinned — never apply this raw):
-#   IMAGE=gcr.io/nyayalens/nyayalens-api:$(git rev-parse --short HEAD) \
-#     envsubst < infra/cloud-run/service.yaml | \
-#     gcloud run services replace - \
-#       --region=asia-south1 \
-#       --project=nyayalens
+# This YAML mirrors the live staging service in project nyayalens-28b93,
+# region asia-south1. The day-to-day deploy uses `gcloud run deploy --image`
+# (see scripts/deploy-backend.ps1); this manifest documents the service
+# shape and is used for ad-hoc rollback via `replace`.
 #
-# The Cloud Build pipeline (infra/cloud-run/cloudbuild.yaml) substitutes
-# IMAGE itself on push-to-main; this file documents the manual flow used
-# for ad-hoc rollbacks.
+# Deploy via replace (image must be SHA-pinned, never apply raw):
+#   $env:IMAGE = "asia-south1-docker.pkg.dev/nyayalens-28b93/nyayalens/nyayalens-api:$(git rev-parse --short HEAD)"
+#   envsubst < infra/cloud-run/service.yaml | `
+#     gcloud run services replace - `
+#       --region=asia-south1 `
+#       --project=nyayalens-28b93
 
 apiVersion: serving.knative.dev/v1
 kind: Service
@@ -24,14 +25,14 @@ spec:
   template:
     metadata:
       annotations:
-        autoscaling.knative.dev/minScale: "0"
-        autoscaling.knative.dev/maxScale: "10"
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "1"
         run.googleapis.com/cpu-throttling: "true"
         run.googleapis.com/execution-environment: gen2
     spec:
       timeoutSeconds: 120
       containerConcurrency: 8
-      serviceAccountName: nyayalens-api@nyayalens.iam.gserviceaccount.com
+      serviceAccountName: nyayalens-api@nyayalens-28b93.iam.gserviceaccount.com
       containers:
         - name: api
           image: ${IMAGE}
@@ -42,34 +43,33 @@ spec:
               cpu: "2"
               memory: 2Gi
           env:
+            # NB: Cloud Run injects PORT itself; do not declare it here.
             - name: NYAYALENS_ENV
-              value: prod
+              value: staging
             - name: NYAYALENS_LOG_LEVEL
               value: INFO
             - name: HOST
               value: "0.0.0.0"
-            - name: PORT
-              value: "8080"
             - name: GOOGLE_CLOUD_PROJECT
-              value: nyayalens
-            - name: FIREBASE_STORAGE_BUCKET
-              value: nyayalens.appspot.com
+              value: nyayalens-28b93
             - name: GEMINI_MODEL_EXPLAIN
-              value: gemini-flash-latest
+              value: gemini-2.5-flash
             - name: GEMINI_MODEL_SCHEMA
-              value: gemini-pro-latest
+              value: gemini-2.5-flash
             - name: GEMINI_TEMPERATURE
               value: "0.2"
             - name: ENABLE_RESPONSE_CACHE
               value: "true"
             - name: ENABLE_GROUNDING_VALIDATOR
               value: "true"
+            - name: USE_FIRESTORE
+              value: "false"
             - name: CORS_ALLOWED_ORIGINS
-              value: "https://nyayalens.web.app,https://nyayalens.firebaseapp.com"
+              value: "https://nyayalens-28b93.web.app,https://nyayalens-28b93.firebaseapp.com"
             - name: GEMINI_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: gemini-api-key
+                  name: GEMINI_API_KEY
                   key: latest
           startupProbe:
             httpGet:

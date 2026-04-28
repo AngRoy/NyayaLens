@@ -239,6 +239,57 @@ The backend reads `FIRESTORE_EMULATOR_HOST` and `FIREBASE_AUTH_EMULATOR_HOST` au
 
 ---
 
+## Deploy
+
+The live stack runs on **Cloud Run** (FastAPI) and **Firebase Hosting** (Flutter web), both under project `nyayalens-28b93`. Public URL: **https://nyayalens-28b93.web.app**.
+
+After a local change, only the side you touched needs to ship. The repo has thin scripts under `scripts/` and `make` aliases that wrap them.
+
+```sh
+make deploy-frontend   # Flutter rebuild + Firebase Hosting deploy (~2 min)
+make deploy-backend    # Container rebuild + Cloud Run deploy (~5 min)
+make deploy            # Both, backend first
+make smoke             # /health + Hosting + /api rewrite check
+make logs-backend      # Last 50 Cloud Run log lines
+make tests             # pytest + flutter test (no deploy)
+```
+
+On Windows without `make`, run the PowerShell scripts directly:
+
+```powershell
+./scripts/deploy-frontend.ps1
+./scripts/deploy-backend.ps1
+./scripts/deploy-all.ps1
+./scripts/smoke.ps1
+./scripts/logs-backend.ps1
+```
+
+The backend script refuses to deploy a dirty `backend/` worktree so the image SHA always matches what's in git. Both deploy scripts run a `/health` smoke test and exit non-zero if anything fails.
+
+**First time setup** (once per laptop or fork):
+
+```powershell
+gcloud auth login
+gcloud config set project nyayalens-28b93
+firebase login
+firebase use nyayalens-28b93
+```
+
+Plus a Gemini API key stored in Secret Manager as `GEMINI_API_KEY`.
+
+**After a deploy:** hard refresh the browser (Ctrl+Shift+R). Firebase Hosting caches `index.html` for an hour, so without a hard refresh you may keep seeing the previous bundle.
+
+**Roll back the backend** to a previous revision if a deploy regresses something:
+
+```powershell
+gcloud run revisions list --service nyayalens-api --region asia-south1
+gcloud run services update-traffic nyayalens-api --region asia-south1 --to-revisions=<previous-revision>=100
+```
+
+Full deploy plan, IAM model, and runbook: [`docs/runbook.md`](docs/runbook.md).
+
+---
+
 ## The demo dataset
 
 `shared/sample_data/placement_synthetic.csv` is seeded with a known 3:1 demographic disparity. The expected demo path produces **DIR = 0.56** before reweighting and **DIR ≈ 0.84** after, which is the headline before and after moment.

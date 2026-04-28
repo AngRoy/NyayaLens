@@ -132,3 +132,50 @@ tmp/
 temp/
 .claude/
 AGENTS.md
+
+# ===========================================================================
+# Production stakes hardening (Cloud Run + Firebase Hosting are live)
+# ===========================================================================
+
+# --- Catch-all for credential JSON shapes ---
+*-credentials.json
+*-creds.json
+*-svcacct.json
+*-sa.json
+application_default_credentials*.json
+gcloud-config*.json
+firebase-tools-token.json
+.firebase-tools-token.json
+
+# --- TLS / signing material ---
+*.pem
+*.key
+*.pfx
+*.p12
+*.cer
+*.crt
+*.jks
+*.keystore
+
+# --- Cloud Run / IaC state ---
+*.tfstate
+*.tfstate.backup
+*.tfstate.*
+.terraform/
+infra/cloud-run/*.local.yaml
+infra/**/*.local.yaml
+
+# --- Diagram + Office app temp files ---
+*.drawio.bkp
+~$*.docx
+~$*.xlsx
+~$*.pptx
+
+# --- Coverage at repo root (not just frontend) ---
+/coverage/
+lcov.info
+.nyc_output/
+
+# --- Local-only dart-define files ---
+**/dart_defines.json
+**/.dart_defines.json
