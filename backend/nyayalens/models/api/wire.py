@@ -92,6 +92,7 @@ class AuditDetailWireResponse(BaseModel):
     proxies: list[dict[str, Any]] = Field(default_factory=list)
     remediation: dict[str, Any] | None = None
     sign_off: dict[str, Any] | None = None
+    tradeoff: dict[str, Any] | None = None
     has_report: bool = False
 
 
@@ -107,6 +108,19 @@ class SignOffWireRequest(BaseModel):
 
     notes: str = Field(min_length=10)
     confirmed: bool
+
+
+class TradeoffSelectionWireRequest(BaseModel):
+    """Recorded when the reviewer picks one metric from a conflict pair."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    metric_chosen: str = Field(min_length=2, description="Metric name to prioritise (e.g. 'dir').")
+    justification: str = Field(min_length=10, description="Why this tradeoff is acceptable.")
+    conflicts_acknowledged: list[str] = Field(
+        min_length=1,
+        description="List of conflict identifiers (e.g. 'dir-vs-eod') being resolved.",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -267,4 +281,5 @@ __all__ = [
     "RecourseSummaryWireResponse",
     "RemediateWireRequest",
     "SignOffWireRequest",
+    "TradeoffSelectionWireRequest",
 ]

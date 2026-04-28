@@ -55,6 +55,7 @@ class StoredAudit:
     conflicts: list[Any] = field(default_factory=list)
     remediation: ReweightingResult | None = None
     sign_off: dict[str, Any] | None = None
+    tradeoff: dict[str, Any] | None = None
     recourse: RecourseSummary | None = None
     report_pdf: bytes | None = None
     created_by_uid: str = "demo-user"

@@ -83,6 +83,7 @@ from nyayalens.models.api.wire import (
     RecourseSummaryWireResponse,
     RemediateWireRequest,
     SignOffWireRequest,
+    TradeoffSelectionWireRequest,
 )
 
 # ---------------------------------------------------------------------------
@@ -110,6 +111,7 @@ RecourseRequestRecord = RecourseRequestRecordWire
 RecourseAssignRequest = RecourseAssignWireRequest
 RecourseResolveRequest = RecourseResolveWireRequest
 RecourseRequestListResponse = RecourseRequestListWireResponse
+TradeoffSelectionRequest = TradeoffSelectionWireRequest
 
 
 router = APIRouter()
@@ -409,6 +411,7 @@ def _audit_detail(a: StoredAudit) -> AuditDetailResponse:
             }
         ),
         sign_off=a.sign_off,
+        tradeoff=a.tradeoff,
         has_report=a.report_pdf is not None,
     )
 
@@ -600,6 +603,67 @@ async def remediate_audit(
             "dir_after": result.dir_after,
             "justification": body.justification,
         },
+    )
+    refreshed = state.get_audit(audit_id)
+    if refreshed is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="audit vanished mid-update",
+        )
+    return _audit_detail(refreshed)
+
+
+@router.post(
+    "/audits/{audit_id}/tradeoff",
+    response_model=AuditDetailResponse,
+    tags=["audits"],
+)
+async def tradeoff_audit(
+    audit_id: str,
+    body: TradeoffSelectionRequest,
+    state: Annotated[AppState, Depends(get_app_state)],
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    audit_writer: Annotated[AuditWriter, Depends(get_audit_writer)],
+) -> AuditDetailResponse:
+    """Record the human's chosen metric when fairness metrics conflict (design §6.3 F8).
+
+    The endpoint refuses (400) if there are no detected conflicts to resolve
+    or if `metric_chosen` is not actually involved in any of the audit's
+    conflicts — this keeps the resolution choice tied to surfaced evidence.
+    """
+    _require(user, "remediation.apply")
+    a = state.get_audit(audit_id)
+    if a is None or a.organization_id != user.organization_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="audit not found")
+    if not a.conflicts:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="no metric conflicts to resolve on this audit",
+        )
+
+    metrics_in_conflicts = {c.metric_a for c in a.conflicts} | {c.metric_b for c in a.conflicts}
+    if body.metric_chosen not in metrics_in_conflicts:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"metric_chosen={body.metric_chosen!r} is not part of any detected conflict; "
+                f"available: {sorted(metrics_in_conflicts)}"
+            ),
+        )
+
+    tradeoff_record = {
+        "metric_chosen": body.metric_chosen,
+        "justification": body.justification,
+        "conflicts_acknowledged": list(body.conflicts_acknowledged),
+        "selected_by_uid": user.uid,
+        "selected_by_name": user.name,
+        "selected_at": datetime.now(UTC).isoformat(),
+    }
+    state.update_audit(audit_id, tradeoff=tradeoff_record)
+    await audit_writer.write(
+        "tradeoff_selected",
+        audit_id=audit_id,
+        details=tradeoff_record,
     )
     refreshed = state.get_audit(audit_id)
     if refreshed is None:

@@ -77,6 +77,7 @@ from nyayalens.models.api.wire import (
     RecourseSummaryWireResponse,
     RemediateWireRequest,
     SignOffWireRequest,
+    TradeoffSelectionWireRequest,
 )
 
 __all__ = [
@@ -131,4 +132,5 @@ __all__ = [
     "SignOffRequest",
     "SignOffView",
     "SignOffWireRequest",
+    "TradeoffSelectionWireRequest",
 ]
