@@ -14,6 +14,7 @@ Imported by:
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import uuid4
@@ -40,7 +41,7 @@ from nyayalens.api.deps import (
     get_privacy_filter,
     get_storage,
 )
-from nyayalens.api.state import AppState, StoredAudit
+from nyayalens.api.state import AppState, StoredAudit, StoredRecourseRequest
 from nyayalens.config import Settings, get_settings
 from nyayalens.core._contracts.llm import LLMClient, LLMPayload, StrictPayload
 from nyayalens.core._contracts.storage import StorageClient
@@ -73,12 +74,17 @@ from nyayalens.models.api.wire import (
     JdScanWireResponse,
     PerturbationWireRequest,
     PerturbationWireResponse,
+    RecourseAssignWireRequest,
+    RecourseRequestListWireResponse,
+    RecourseRequestRecordWire,
     RecourseRequestWireBody,
     RecourseRequestWireResponse,
+    RecourseResolveWireRequest,
     RecourseSummaryWireRequest,
     RecourseSummaryWireResponse,
     RemediateWireRequest,
     SignOffWireRequest,
+    TradeoffSelectionWireRequest,
 )
 
 # ---------------------------------------------------------------------------
@@ -102,9 +108,32 @@ RecourseSummaryRequest = RecourseSummaryWireRequest
 RecourseSummaryResponse = RecourseSummaryWireResponse
 RecourseRequestBody = RecourseRequestWireBody
 RecourseRequestResponse = RecourseRequestWireResponse
+RecourseRequestRecord = RecourseRequestRecordWire
+RecourseAssignRequest = RecourseAssignWireRequest
+RecourseResolveRequest = RecourseResolveWireRequest
+RecourseRequestListResponse = RecourseRequestListWireResponse
+TradeoffSelectionRequest = TradeoffSelectionWireRequest
 
 
 router = APIRouter()
+
+
+def _recourse_record(req: StoredRecourseRequest) -> RecourseRequestRecord:
+    return RecourseRequestRecord(
+        request_id=req.request_id,
+        audit_id=req.audit_id,
+        organization_id=req.organization_id,
+        applicant_identifier=req.applicant_identifier,
+        contact_email=req.contact_email,
+        request_type=req.request_type,
+        body=req.body,
+        status=req.status,
+        assigned_to_uid=req.assigned_to_uid,
+        assigned_to_name=req.assigned_to_name,
+        reviewer_notes=req.reviewer_notes,
+        created_at=req.created_at,
+        resolved_at=req.resolved_at,
+    )
 
 
 def _require(user: CurrentUser, perm: Permission) -> None:
@@ -112,6 +141,26 @@ def _require(user: CurrentUser, perm: Permission) -> None:
         require(user.role, perm)
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+
+
+def _require_audit_mode_for_lifecycle(audit: StoredAudit) -> None:
+    """Audit-mode-only gate per design §6.3 F4.
+
+    Real-data lifecycle endpoints (analyze, remediate, tradeoff, sign-off,
+    recourse summary, report generation) must refuse audits created in
+    `probe` mode — Probe Mode produces synthetic LLM scenarios, not
+    institutional decisions, so applying reweighting or sign-off to one is
+    a category error. Returns 409 Conflict so the UI can surface the
+    boundary violation distinctly from a missing record (404).
+    """
+    if audit.mode != "audit":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"endpoint requires mode='audit'; this record is mode={audit.mode!r}. "
+                "Probe-mode records run through the /probes/* endpoints."
+            ),
+        )
 
 
 # ============================================================================
@@ -159,6 +208,7 @@ async def upload_dataset(
             for c in parsed.columns
         ],
         sample_rows=parsed.sample_rows,
+        quality=asdict(parsed.quality) if parsed.quality is not None else None,
     )
 
 
@@ -383,6 +433,7 @@ def _audit_detail(a: StoredAudit) -> AuditDetailResponse:
             }
         ),
         sign_off=a.sign_off,
+        tradeoff=a.tradeoff,
         has_report=a.report_pdf is not None,
     )
 
@@ -418,6 +469,7 @@ async def analyze_audit(
     a = state.get_audit(audit_id)
     if a is None or a.organization_id != user.organization_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="audit not found")
+    _require_audit_mode_for_lifecycle(a)
     if a.dataset_id is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="no dataset")
     ds = state.get_dataset(a.dataset_id)
@@ -547,6 +599,7 @@ async def remediate_audit(
     a = state.get_audit(audit_id)
     if a is None or a.organization_id != user.organization_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="audit not found")
+    _require_audit_mode_for_lifecycle(a)
     if a.dataset_id is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="no dataset")
     ds = state.get_dataset(a.dataset_id)
@@ -585,6 +638,68 @@ async def remediate_audit(
 
 
 @router.post(
+    "/audits/{audit_id}/tradeoff",
+    response_model=AuditDetailResponse,
+    tags=["audits"],
+)
+async def tradeoff_audit(
+    audit_id: str,
+    body: TradeoffSelectionRequest,
+    state: Annotated[AppState, Depends(get_app_state)],
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    audit_writer: Annotated[AuditWriter, Depends(get_audit_writer)],
+) -> AuditDetailResponse:
+    """Record the human's chosen metric when fairness metrics conflict (design §6.3 F8).
+
+    The endpoint refuses (400) if there are no detected conflicts to resolve
+    or if `metric_chosen` is not actually involved in any of the audit's
+    conflicts — this keeps the resolution choice tied to surfaced evidence.
+    """
+    _require(user, "remediation.apply")
+    a = state.get_audit(audit_id)
+    if a is None or a.organization_id != user.organization_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="audit not found")
+    _require_audit_mode_for_lifecycle(a)
+    if not a.conflicts:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="no metric conflicts to resolve on this audit",
+        )
+
+    metrics_in_conflicts = {c.metric_a for c in a.conflicts} | {c.metric_b for c in a.conflicts}
+    if body.metric_chosen not in metrics_in_conflicts:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"metric_chosen={body.metric_chosen!r} is not part of any detected conflict; "
+                f"available: {sorted(metrics_in_conflicts)}"
+            ),
+        )
+
+    tradeoff_record = {
+        "metric_chosen": body.metric_chosen,
+        "justification": body.justification,
+        "conflicts_acknowledged": list(body.conflicts_acknowledged),
+        "selected_by_uid": user.uid,
+        "selected_by_name": user.name,
+        "selected_at": datetime.now(UTC).isoformat(),
+    }
+    state.update_audit(audit_id, tradeoff=tradeoff_record)
+    await audit_writer.write(
+        "tradeoff_selected",
+        audit_id=audit_id,
+        details=tradeoff_record,
+    )
+    refreshed = state.get_audit(audit_id)
+    if refreshed is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="audit vanished mid-update",
+        )
+    return _audit_detail(refreshed)
+
+
+@router.post(
     "/audits/{audit_id}/sign-off",
     response_model=AuditDetailResponse,
     tags=["audits"],
@@ -605,6 +720,7 @@ async def sign_off_audit(
     a = state.get_audit(audit_id)
     if a is None or a.organization_id != user.organization_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="audit not found")
+    _require_audit_mode_for_lifecycle(a)
     sign_off = {
         "reviewer_uid": user.uid,
         "reviewer_name": user.name,
@@ -763,6 +879,7 @@ async def recourse_summary(
     a = state.get_audit(audit_id)
     if a is None or a.organization_id != user.organization_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="audit not found")
+    _require_audit_mode_for_lifecycle(a)
     summary = build_recourse_summary(
         audit_id=audit_id,
         organization_name=body.organization_name,
@@ -796,9 +913,32 @@ async def recourse_summary(
 )
 async def file_recourse(
     body: RecourseRequestBody,
+    state: Annotated[AppState, Depends(get_app_state)],
+    user: Annotated[CurrentUser, Depends(get_current_user)],
     audit_writer: Annotated[AuditWriter, Depends(get_audit_writer)],
 ) -> RecourseRequestResponse:
+    _require(user, "recourse.file")
+    audit = state.get_audit(body.audit_id)
+    if audit is None or audit.organization_id != user.organization_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="audit not found")
+    _require_audit_mode_for_lifecycle(audit)
+    if body.request_type not in ("human_review", "explanation", "appeal"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"unknown request_type: {body.request_type!r}",
+        )
     request_id = uuid4().hex
+    state.put_recourse_request(
+        StoredRecourseRequest(
+            request_id=request_id,
+            audit_id=body.audit_id,
+            organization_id=audit.organization_id,
+            applicant_identifier=body.applicant_identifier,
+            contact_email=body.contact_email,
+            request_type=body.request_type,  # type: ignore[arg-type]
+            body=body.body,
+        )
+    )
     await audit_writer.write(
         "recourse_filed",
         audit_id=body.audit_id,
@@ -811,6 +951,110 @@ async def file_recourse(
         },
     )
     return RecourseRequestResponse(request_id=request_id)
+
+
+@router.get(
+    "/recourse-requests",
+    response_model=RecourseRequestListResponse,
+    tags=["recourse"],
+)
+async def list_recourse_requests(
+    state: Annotated[AppState, Depends(get_app_state)],
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> RecourseRequestListResponse:
+    _require(user, "recourse.review")
+    items = state.list_recourse_requests(user.organization_id)
+    return RecourseRequestListResponse(requests=[_recourse_record(r) for r in items])
+
+
+@router.post(
+    "/recourse-requests/{request_id}/assign",
+    response_model=RecourseRequestRecord,
+    tags=["recourse"],
+)
+async def assign_recourse_request(
+    request_id: str,
+    body: RecourseAssignRequest,
+    state: Annotated[AppState, Depends(get_app_state)],
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    audit_writer: Annotated[AuditWriter, Depends(get_audit_writer)],
+) -> RecourseRequestRecord:
+    _require(user, "recourse.review")
+    req = state.get_recourse_request(request_id)
+    if req is None or req.organization_id != user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="recourse request not found"
+        )
+    if req.status not in ("pending", "in_review"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"cannot assign a {req.status} request",
+        )
+    updated = state.update_recourse_request(
+        request_id,
+        status="in_review",
+        assigned_to_uid=body.assignee_uid,
+        assigned_to_name=body.assignee_name,
+    )
+    if updated is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="recourse request vanished"
+        )
+    await audit_writer.write(
+        "recourse_assigned",
+        audit_id=updated.audit_id,
+        details={
+            "request_id": request_id,
+            "assigned_to_uid": body.assignee_uid,
+            "assigned_to_name": body.assignee_name,
+        },
+    )
+    return _recourse_record(updated)
+
+
+@router.post(
+    "/recourse-requests/{request_id}/resolve",
+    response_model=RecourseRequestRecord,
+    tags=["recourse"],
+)
+async def resolve_recourse_request(
+    request_id: str,
+    body: RecourseResolveRequest,
+    state: Annotated[AppState, Depends(get_app_state)],
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    audit_writer: Annotated[AuditWriter, Depends(get_audit_writer)],
+) -> RecourseRequestRecord:
+    _require(user, "recourse.review")
+    req = state.get_recourse_request(request_id)
+    if req is None or req.organization_id != user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="recourse request not found"
+        )
+    if req.status not in ("pending", "in_review"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"recourse already resolved (status={req.status})",
+        )
+    updated = state.update_recourse_request(
+        request_id,
+        status=body.resolution,
+        reviewer_notes=body.reviewer_notes,
+        resolved_at=datetime.now(UTC),
+    )
+    if updated is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="recourse request vanished"
+        )
+    await audit_writer.write(
+        "recourse_resolved",
+        audit_id=updated.audit_id,
+        details={
+            "request_id": request_id,
+            "status": body.resolution,
+            "reviewer_notes": body.reviewer_notes,
+        },
+    )
+    return _recourse_record(updated)
 
 
 # ============================================================================
@@ -830,6 +1074,7 @@ async def generate_report(
     a = state.get_audit(audit_id)
     if a is None or a.organization_id != user.organization_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="audit not found")
+    _require_audit_mode_for_lifecycle(a)
 
     schema = getattr(a, "_confirmed_schema", {}) or {}
     data = build_audit_report(

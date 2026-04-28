@@ -62,6 +62,11 @@ class Settings(BaseSettings):
     # -- Feature flags --
     enable_response_cache: bool = True
     enable_grounding_validator: bool = True
+    use_firestore: bool = False
+    """When true, deps.py wires `FirestoreAuditSink` and `FirestoreStorage`.
+    Otherwise the in-memory adapters are used. Production should set this
+    to true; local-dev keeps the default False so `pytest` and the demo
+    flow run without GCP credentials."""
 
     # -- Derived --
 

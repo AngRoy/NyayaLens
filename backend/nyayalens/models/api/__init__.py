@@ -67,12 +67,17 @@ from nyayalens.models.api.wire import (
     JdScanWireResponse,
     PerturbationWireRequest,
     PerturbationWireResponse,
+    RecourseAssignWireRequest,
+    RecourseRequestListWireResponse,
+    RecourseRequestRecordWire,
     RecourseRequestWireBody,
     RecourseRequestWireResponse,
+    RecourseResolveWireRequest,
     RecourseSummaryWireRequest,
     RecourseSummaryWireResponse,
     RemediateWireRequest,
     SignOffWireRequest,
+    TradeoffSelectionWireRequest,
 )
 
 __all__ = [
@@ -104,10 +109,14 @@ __all__ = [
     "PerturbationWireResponse",
     "ProbeVariantResult",
     "ProxyFlagView",
+    "RecourseAssignWireRequest",
     "RecourseRequestCreate",
+    "RecourseRequestListWireResponse",
+    "RecourseRequestRecordWire",
     "RecourseRequestView",
     "RecourseRequestWireBody",
     "RecourseRequestWireResponse",
+    "RecourseResolveWireRequest",
     "RecourseSummaryView",
     "RecourseSummaryWireRequest",
     "RecourseSummaryWireResponse",
@@ -123,4 +132,5 @@ __all__ = [
     "SignOffRequest",
     "SignOffView",
     "SignOffWireRequest",
+    "TradeoffSelectionWireRequest",
 ]

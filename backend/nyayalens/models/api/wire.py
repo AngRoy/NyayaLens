@@ -14,7 +14,7 @@ Imported by:
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -31,6 +31,7 @@ class DatasetUploadWireResponse(BaseModel):
     column_count: int
     columns: list[dict[str, Any]]
     sample_rows: list[dict[str, Any]]
+    quality: dict[str, Any] | None = None
 
 
 class DetectSchemaWireResponse(BaseModel):
@@ -92,6 +93,7 @@ class AuditDetailWireResponse(BaseModel):
     proxies: list[dict[str, Any]] = Field(default_factory=list)
     remediation: dict[str, Any] | None = None
     sign_off: dict[str, Any] | None = None
+    tradeoff: dict[str, Any] | None = None
     has_report: bool = False
 
 
@@ -107,6 +109,19 @@ class SignOffWireRequest(BaseModel):
 
     notes: str = Field(min_length=10)
     confirmed: bool
+
+
+class TradeoffSelectionWireRequest(BaseModel):
+    """Recorded when the reviewer picks one metric from a conflict pair."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    metric_chosen: str = Field(min_length=2, description="Metric name to prioritise (e.g. 'dir').")
+    justification: str = Field(min_length=10, description="Why this tradeoff is acceptable.")
+    conflicts_acknowledged: list[str] = Field(
+        min_length=1,
+        description="List of conflict identifiers (e.g. 'dir-vs-eod') being resolved.",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +216,52 @@ class RecourseRequestWireResponse(BaseModel):
     status: str = "pending"
 
 
+class RecourseRequestRecordWire(BaseModel):
+    """Persisted recourse request — returned by list and single-get endpoints."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    request_id: str
+    audit_id: str
+    organization_id: str
+    applicant_identifier: str
+    contact_email: str
+    request_type: Literal["human_review", "explanation", "appeal"]
+    body: str
+    status: Literal[
+        "pending",
+        "in_review",
+        "resolved_upheld",
+        "resolved_overturned",
+        "resolved_referred",
+    ]
+    assigned_to_uid: str | None = None
+    assigned_to_name: str | None = None
+    reviewer_notes: str = ""
+    created_at: datetime
+    resolved_at: datetime | None = None
+
+
+class RecourseAssignWireRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    assignee_uid: str = Field(min_length=1)
+    assignee_name: str = Field(min_length=2)
+
+
+class RecourseResolveWireRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    resolution: Literal["resolved_upheld", "resolved_overturned", "resolved_referred"]
+    reviewer_notes: str = Field(min_length=10, description="Justification, minimum 10 chars.")
+
+
+class RecourseRequestListWireResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    requests: list[RecourseRequestRecordWire] = Field(default_factory=list)
+
+
 __all__ = [
     "AuditDetailWireResponse",
     "AuditSummaryWireResponse",
@@ -211,10 +272,15 @@ __all__ = [
     "JdScanWireResponse",
     "PerturbationWireRequest",
     "PerturbationWireResponse",
+    "RecourseAssignWireRequest",
+    "RecourseRequestListWireResponse",
+    "RecourseRequestRecordWire",
     "RecourseRequestWireBody",
     "RecourseRequestWireResponse",
+    "RecourseResolveWireRequest",
     "RecourseSummaryWireRequest",
     "RecourseSummaryWireResponse",
     "RemediateWireRequest",
     "SignOffWireRequest",
+    "TradeoffSelectionWireRequest",
 ]

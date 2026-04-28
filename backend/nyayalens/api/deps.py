@@ -49,14 +49,43 @@ _llm: LLMClient | None = None
 _domain: HiringDomain | None = None
 
 
+def _build_audit_sink(settings: Settings) -> AuditSink:
+    """Build the audit sink: Firestore in prod (when flagged), InMemory otherwise."""
+    if not settings.use_firestore:
+        return InMemoryAuditSink()
+    try:
+        from nyayalens.adapters.firestore import FirestoreAuditSink
+
+        return FirestoreAuditSink(project=settings.google_cloud_project or None)
+    except Exception as exc:
+        log.warning("Falling back to InMemoryAuditSink (use_firestore=True but %s)", exc)
+        return InMemoryAuditSink()
+
+
+def _build_storage(settings: Settings) -> StorageClient:
+    """Build the storage client: Cloud Storage in prod (when flagged + bucket set)."""
+    if not settings.use_firestore or not settings.firebase_storage_bucket:
+        return InMemoryStorage()
+    try:
+        from nyayalens.adapters.firestore import FirestoreStorage
+
+        return FirestoreStorage(
+            bucket=settings.firebase_storage_bucket,
+            project=settings.google_cloud_project or None,
+        )
+    except Exception as exc:
+        log.warning("Falling back to InMemoryStorage (use_firestore=True but %s)", exc)
+        return InMemoryStorage()
+
+
 def _ensure_singletons(settings: Settings) -> None:
     global _state, _audit_sink, _storage, _pii, _privacy_filter, _llm, _domain
     if _state is None:
         _state = AppState()
     if _audit_sink is None:
-        _audit_sink = InMemoryAuditSink()
+        _audit_sink = _build_audit_sink(settings)
     if _storage is None:
-        _storage = InMemoryStorage()
+        _storage = _build_storage(settings)
     if _pii is None:
         _pii = RegexPIIRecognizer()
     if _privacy_filter is None:

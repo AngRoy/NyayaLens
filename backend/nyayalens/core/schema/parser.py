@@ -36,14 +36,40 @@ class ColumnInfo:
 
 
 @dataclass(frozen=True, slots=True)
+class DataQuality:
+    """Aggregate data-quality stats surfaced on the upload response.
+
+    Field semantics:
+      - ``missing_cell_pct``: fraction of NaN cells across the whole frame, in [0, 1].
+      - ``duplicate_row_pct``: duplicate rows divided by total rows, in [0, 1].
+      - ``type_consistency_pct``: share of columns whose inferred dtype is
+        coercible without error on every non-null cell. Range [0, 1].
+      - ``overall_score``: ``1 - max(missing, duplicates, 1 - type_consistency)``
+        clamped to [0, 1]. A single dashboard number; the three components
+        above give the diagnostic detail.
+      - ``warnings``: human-readable strings the UI renders as chips.
+    """
+
+    row_count: int
+    column_count: int
+    missing_cell_pct: float
+    duplicate_row_pct: float
+    type_consistency_pct: float
+    overall_score: float
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True)
 class ParsedDataset:
     df: pd.DataFrame
     columns: list[ColumnInfo]
     row_count: int
     sample_rows: list[dict[str, Any]]
+    quality: DataQuality | None = None
 
 
 _TEXT_THRESHOLD: int = 50  # avg string length above which a column reads as free text
+_MIN_ROW_COUNT_FOR_RELIABILITY: int = 30  # mirrors core.bias.metrics.MIN_GROUP_SIZE
 _DATE_LIKE_RE = re.compile(r"^\s*(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4})\s*$")
 
 
@@ -141,13 +167,89 @@ def parse_dataset(
     df.columns = [str(c).strip() for c in df.columns]
     columns = [_column_info(c, df[c]) for c in df.columns]
     sample = df.head(sample_rows).replace({np.nan: None}).to_dict(orient="records")
+    quality = _compute_quality(df, columns)
 
     return ParsedDataset(
         df=df,
         columns=columns,
         row_count=len(df),
         sample_rows=sample,
+        quality=quality,
     )
 
 
-__all__ = ["ColumnInfo", "ColumnType", "ParsedDataset", "parse_dataset"]
+def _is_type_consistent(series: pd.Series, dtype: ColumnType) -> bool:
+    """True iff every non-null cell in `series` can be coerced to `dtype`."""
+    cleaned = series.dropna()
+    if cleaned.empty:
+        return True
+    if dtype == "numeric":
+        coerced = pd.to_numeric(cleaned, errors="coerce")
+        return bool(coerced.notna().all())
+    if dtype == "datetime":
+        try:
+            coerced = pd.to_datetime(cleaned, errors="coerce", utc=False)
+        except (ValueError, TypeError):
+            return False
+        return bool(coerced.notna().all())
+    if dtype == "boolean":
+        allowed = {True, False, "true", "false", "yes", "no", "0", "1"}
+        return bool(cleaned.astype(str).str.lower().isin({str(v).lower() for v in allowed}).all())
+    # categorical and text are always "consistent" — they're the catch-alls.
+    return True
+
+
+def _compute_quality(df: pd.DataFrame, columns: list[ColumnInfo]) -> DataQuality:
+    n_rows = len(df)
+    n_cols = len(columns)
+    if n_rows == 0 or n_cols == 0:
+        return DataQuality(
+            row_count=n_rows,
+            column_count=n_cols,
+            missing_cell_pct=0.0,
+            duplicate_row_pct=0.0,
+            type_consistency_pct=1.0,
+            overall_score=0.0,
+            warnings=["Dataset is empty."] if n_rows == 0 else ["Dataset has no columns."],
+        )
+
+    total_cells = float(n_rows * n_cols)
+    missing_cells = float(df.isna().sum().sum())
+    missing_cell_pct = missing_cells / total_cells if total_cells > 0 else 0.0
+
+    duplicates = int(df.duplicated().sum())
+    duplicate_row_pct = duplicates / float(n_rows) if n_rows > 0 else 0.0
+
+    consistent = sum(1 for c in columns if _is_type_consistent(df[c.name], c.dtype))
+    type_consistency_pct = consistent / float(n_cols) if n_cols > 0 else 1.0
+
+    overall = 1.0 - max(missing_cell_pct, duplicate_row_pct, 1.0 - type_consistency_pct)
+    overall_score = float(max(0.0, min(1.0, overall)))
+
+    warnings: list[str] = []
+    if n_rows < _MIN_ROW_COUNT_FOR_RELIABILITY:
+        warnings.append(
+            f"Only {n_rows} rows — below the n={_MIN_ROW_COUNT_FOR_RELIABILITY} "
+            f"reliability threshold for fairness metrics."
+        )
+    if missing_cell_pct >= 0.10:
+        warnings.append(f"{missing_cell_pct:.0%} of cells are missing.")
+    if duplicate_row_pct >= 0.05:
+        warnings.append(f"{duplicate_row_pct:.0%} of rows are duplicates.")
+    if type_consistency_pct < 1.0:
+        warnings.append(
+            f"{(1.0 - type_consistency_pct):.0%} of columns failed strict type coercion."
+        )
+
+    return DataQuality(
+        row_count=n_rows,
+        column_count=n_cols,
+        missing_cell_pct=float(missing_cell_pct),
+        duplicate_row_pct=float(duplicate_row_pct),
+        type_consistency_pct=float(type_consistency_pct),
+        overall_score=overall_score,
+        warnings=warnings,
+    )
+
+
+__all__ = ["ColumnInfo", "ColumnType", "DataQuality", "ParsedDataset", "parse_dataset"]

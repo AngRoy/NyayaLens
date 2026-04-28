@@ -140,10 +140,61 @@ What-If Tool / LIT, and Microsoft Responsible AI Toolbox.
 
 ---
 
+## Demo (60-second happy path)
+
+The repository ships a deterministic synthetic placement CSV with a
+3:1 demographic disparity planted in. The full pipeline below is what
+the live demo walks through end-to-end.
+
+```sh
+# Terminal 1 — backend
+cd backend
+. .venv/Scripts/activate         # macOS/Linux: source .venv/bin/activate
+uvicorn nyayalens.main:app --reload --port 8000
+
+# Terminal 2 — frontend
+cd frontend
+flutter run -d chrome --dart-define=API_BASE=http://localhost:8000/api/v1
+```
+
+In the browser:
+
+1. Click **Start audit demo** → Upload Wizard.
+2. Upload `shared/sample_data/placement_synthetic.csv`.
+3. Confirm Gemini's detected schema (Gender + Category sensitive,
+   Placed = outcome).
+4. Watch the bias heatmap render — DIR for Gender ≈ 0.49 (red), well
+   under the EEOC 80% rule.
+5. Apply reweighting → DIR moves to 1.00 with the estimated accuracy
+   delta surfaced in the before/after card.
+6. Sign off with documented justification, then generate the audit
+   report. The PDF embeds parts A (audit findings), B (probe findings,
+   if any), and C (governance record).
+
+A scripted version with click-by-click talking points lives in
+[`docs/demo-script.md`](docs/demo-script.md).
+
+## Deployment
+
+`docs/runbook.md` documents the production deploy path: GCP project
+bootstrap, Secret Manager wiring for `GEMINI_API_KEY`, Cloud Build
+trigger configuration, and the post-deploy smoke-test checklist judges
+should follow.
+
+## Contributing
+
+See [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) (and the root
+[`CONTRIBUTING.md`](CONTRIBUTING.md) shim that GitHub reads
+automatically).
+
 ## Status
 
-Week 1 — Foundation. This README and the scaffold are the first artifacts.
-See `docs/adr/` for architectural decisions and the plan tracker for the
-4-week sprint.
+Backend MVP shipped. The full audit lifecycle (upload → schema →
+metrics → conflicts → tradeoff → remediate → recourse → sign-off →
+PDF), the LLM bias probe (JD scan + demographic perturbation), the
+recourse review workflow (file → assign → resolve), and the audit/probe
+mode separation are all wired and tested (140+ tests, ruff + mypy
+strict clean). Production persistence (Firestore-backed AppState) is
+tracked separately as the next backend follow-up.
 
 — *Team Zenith*
