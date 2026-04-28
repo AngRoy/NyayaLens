@@ -5,7 +5,10 @@ version: 0.1.0+1
 
 environment:
   sdk: ^3.5.0
-  flutter: ">=3.24.0"
+  # `Color.withValues(alpha:)` (used in features/demo and shared/widgets)
+  # landed in Flutter 3.27. Pin the minimum so contributors on older
+  # SDKs see a `pub get` resolver error rather than a missing-method one.
+  flutter: ">=3.27.0"
 
 dependencies:
   flutter:
