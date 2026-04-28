@@ -19,10 +19,11 @@ from nyayalens.config import Settings, get_settings
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Startup/shutdown hooks.
 
-    Kept intentionally small: initialise adapter singletons here once code
-    for them lands. The tests rely on being able to construct `create_app`
-    without side effects, so nothing in the lifespan must talk to the
-    network by default.
+    Adapter singletons (`AppState`, `AuditSink`, `LLMClient`, ...) are
+    constructed lazily on first request inside
+    `nyayalens.api.deps._ensure_singletons`, so the lifespan body stays a
+    no-op. Tests rely on being able to construct `create_app` without
+    network side effects; nothing here must talk to the network.
     """
     yield
 
