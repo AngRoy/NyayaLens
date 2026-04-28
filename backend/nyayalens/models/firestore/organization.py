@@ -11,7 +11,7 @@ design §6.3 F3 reference values.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -35,4 +35,4 @@ class OrganizationDoc(BaseModel):
     organization_id: str
     name: str
     policy: OrganizationPolicy = Field(default_factory=OrganizationPolicy)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

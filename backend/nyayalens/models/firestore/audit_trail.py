@@ -12,7 +12,7 @@ no other file serves this role.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -28,6 +28,6 @@ class AuditTrailDoc(BaseModel):
     user_id: str
     user_name: str
     user_role: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     ip_address: str | None = None
     details: dict[str, Any] = Field(default_factory=dict)

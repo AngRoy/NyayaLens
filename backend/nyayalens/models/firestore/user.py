@@ -10,7 +10,7 @@ Maps to Firestore path: `/users/{uid}`. ISO-8601 timestamps used by Firestore.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -26,4 +26,4 @@ class UserDoc(BaseModel):
     email: str
     role: Role
     organization_id: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

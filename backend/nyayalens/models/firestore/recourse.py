@@ -11,7 +11,7 @@ no other file serves this role.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -37,5 +37,5 @@ class RecourseRequestDoc(BaseModel):
     assigned_to_uid: str | None = None
     assigned_to_name: str | None = None
     reviewer_notes: str = ""
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     resolved_at: datetime | None = None

@@ -13,7 +13,7 @@ serves this role.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -55,8 +55,8 @@ class AuditDoc(BaseModel):
     recourse_path: str | None = None
 
     created_by_uid: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     version: int = Field(
         default=1,
         description="Optimistic-concurrency version. Increment on every update.",
