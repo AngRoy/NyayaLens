@@ -15,20 +15,15 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from pydantic import BaseModel
 
 from nyayalens.models import api as api_models
-
-if TYPE_CHECKING:
-    from pydantic import BaseModel
 
 DEFAULT_OUT = Path(__file__).resolve().parents[2] / "shared" / "schemas"
 
 
 def _public_models() -> list[type[BaseModel]]:
     """Discover the BaseModel subclasses re-exported by `nyayalens.models.api`."""
-    from pydantic import BaseModel  # noqa: F811 - runtime use within function body
-
     out: list[type[BaseModel]] = []
     for name in api_models.__all__:
         obj = getattr(api_models, name, None)
