@@ -688,6 +688,8 @@ class JdScanResponse(BaseModel):
     inclusivity_score: float
     flagged_phrases: list[dict[str, Any]]
     rewrite_suggestions: list[str]
+    backend: str
+    created_at: datetime
 
 
 @router.post(
@@ -709,6 +711,8 @@ async def jd_scan(
             for p in result.flagged_phrases
         ],
         rewrite_suggestions=result.rewrite_suggestions,
+        backend=result.backend,
+        created_at=result.generated_at,
     )
 
 
