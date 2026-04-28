@@ -24,5 +24,5 @@ class _SmokeApiClient extends ApiClient {
   _SmokeApiClient() : super(baseUrl: 'http://test.invalid');
 
   @override
-  Future<List<dynamic>> listAudits() async => const [];
+  Future<List<Object?>> listAudits() async => const [];
 }

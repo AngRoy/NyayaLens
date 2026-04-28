@@ -118,7 +118,7 @@ class _FakeApiClient extends ApiClient {
   _FakeApiClient() : super(baseUrl: 'http://test.invalid');
 
   @override
-  Future<List<dynamic>> listAudits() async {
+  Future<List<Object?>> listAudits() async {
     return [
       {
         'audit_id': 'audit-1',
@@ -142,7 +142,7 @@ class _FailingApiClient extends ApiClient {
   _FailingApiClient() : super(baseUrl: 'http://test.invalid');
 
   @override
-  Future<List<dynamic>> listAudits() async {
+  Future<List<Object?>> listAudits() async {
     throw ApiException('Backend unavailable', 503);
   }
 }

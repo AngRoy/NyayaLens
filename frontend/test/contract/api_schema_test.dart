@@ -30,7 +30,7 @@ Map<String, dynamic> _loadSchema(String className) {
 
 Iterable<String> _propertyNames(Map<String, dynamic> schema) {
   final props = schema['properties'];
-  if (props is! Map) return const [];
+  if (props is! Map<Object?, Object?>) return const [];
   return props.keys.cast<String>();
 }
 
@@ -56,10 +56,12 @@ void main() {
 
     test('SignOffRequest enforces a non-trivial notes minimum length', () {
       final schema = _loadSchema('SignOffRequest');
-      final notes = (schema['properties'] as Map)['notes'] as Map?;
+      final properties = schema['properties'];
+      expect(properties, isA<Map<Object?, Object?>>());
+      final notes = (properties! as Map<Object?, Object?>)['notes'];
       expect(notes, isNotNull);
       // Backend Pydantic Field(min_length=10) maps to JSON Schema minLength.
-      expect(notes!['minLength'], greaterThanOrEqualTo(10));
+      expect((notes! as Map<Object?, Object?>)['minLength'], greaterThanOrEqualTo(10));
     });
   });
 }
