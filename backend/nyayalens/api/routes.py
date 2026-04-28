@@ -143,6 +143,26 @@ def _require(user: CurrentUser, perm: Permission) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
 
+def _require_audit_mode_for_lifecycle(audit: StoredAudit) -> None:
+    """Audit-mode-only gate per design §6.3 F4.
+
+    Real-data lifecycle endpoints (analyze, remediate, tradeoff, sign-off,
+    recourse summary, report generation) must refuse audits created in
+    `probe` mode — Probe Mode produces synthetic LLM scenarios, not
+    institutional decisions, so applying reweighting or sign-off to one is
+    a category error. Returns 409 Conflict so the UI can surface the
+    boundary violation distinctly from a missing record (404).
+    """
+    if audit.mode != "audit":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"endpoint requires mode='audit'; this record is mode={audit.mode!r}. "
+                "Probe-mode records run through the /probes/* endpoints."
+            ),
+        )
+
+
 # ============================================================================
 # 1. Datasets
 # ============================================================================
@@ -449,6 +469,7 @@ async def analyze_audit(
     a = state.get_audit(audit_id)
     if a is None or a.organization_id != user.organization_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="audit not found")
+    _require_audit_mode_for_lifecycle(a)
     if a.dataset_id is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="no dataset")
     ds = state.get_dataset(a.dataset_id)
@@ -578,6 +599,7 @@ async def remediate_audit(
     a = state.get_audit(audit_id)
     if a is None or a.organization_id != user.organization_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="audit not found")
+    _require_audit_mode_for_lifecycle(a)
     if a.dataset_id is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="no dataset")
     ds = state.get_dataset(a.dataset_id)
@@ -637,6 +659,7 @@ async def tradeoff_audit(
     a = state.get_audit(audit_id)
     if a is None or a.organization_id != user.organization_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="audit not found")
+    _require_audit_mode_for_lifecycle(a)
     if not a.conflicts:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -697,6 +720,7 @@ async def sign_off_audit(
     a = state.get_audit(audit_id)
     if a is None or a.organization_id != user.organization_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="audit not found")
+    _require_audit_mode_for_lifecycle(a)
     sign_off = {
         "reviewer_uid": user.uid,
         "reviewer_name": user.name,
@@ -855,6 +879,7 @@ async def recourse_summary(
     a = state.get_audit(audit_id)
     if a is None or a.organization_id != user.organization_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="audit not found")
+    _require_audit_mode_for_lifecycle(a)
     summary = build_recourse_summary(
         audit_id=audit_id,
         organization_name=body.organization_name,
@@ -896,6 +921,7 @@ async def file_recourse(
     audit = state.get_audit(body.audit_id)
     if audit is None or audit.organization_id != user.organization_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="audit not found")
+    _require_audit_mode_for_lifecycle(audit)
     if body.request_type not in ("human_review", "explanation", "appeal"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1048,6 +1074,7 @@ async def generate_report(
     a = state.get_audit(audit_id)
     if a is None or a.organization_id != user.organization_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="audit not found")
+    _require_audit_mode_for_lifecycle(a)
 
     schema = getattr(a, "_confirmed_schema", {}) or {}
     data = build_audit_report(
