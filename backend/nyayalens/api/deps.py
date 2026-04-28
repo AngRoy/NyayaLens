@@ -14,6 +14,11 @@ from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, status
 
+from nyayalens.adapters.firebase_auth import (
+    InvalidIdentityError,
+    TokenVerificationError,
+    verify_bearer_token,
+)
 from nyayalens.adapters.inmemory import (
     InMemoryAuditSink,
     InMemoryStorage,
@@ -138,13 +143,13 @@ class CurrentUser:
     organization_id: str
 
 
-def get_current_user(
-    x_user_id: Annotated[str | None, Header()] = None,
-    x_user_name: Annotated[str | None, Header()] = None,
-    x_user_role: Annotated[str | None, Header()] = None,
-    x_organization_id: Annotated[str | None, Header()] = None,
+def _from_demo_headers(
+    x_user_id: str | None,
+    x_user_name: str | None,
+    x_user_role: str | None,
+    x_organization_id: str | None,
 ) -> CurrentUser:
-    """Lightweight header-based identity for the MVP."""
+    """Demo-mode identity (only honoured outside production)."""
     if not x_user_id:
         return CurrentUser(
             uid="demo-uid",
@@ -164,6 +169,58 @@ def get_current_user(
         role=role,  # type: ignore[arg-type]
         organization_id=x_organization_id or "demo-org",
     )
+
+
+def get_current_user(
+    settings: Annotated[Settings, Depends(get_settings)],
+    authorization: Annotated[str | None, Header()] = None,
+    x_user_id: Annotated[str | None, Header()] = None,
+    x_user_name: Annotated[str | None, Header()] = None,
+    x_user_role: Annotated[str | None, Header()] = None,
+    x_organization_id: Annotated[str | None, Header()] = None,
+) -> CurrentUser:
+    """Identify the caller.
+
+    Production (`NYAYALENS_ENV=prod` and no Firebase emulator running):
+        Requires a verified Firebase ID token in the
+        ``Authorization: Bearer <token>`` header. The token's custom claims
+        ``role`` and ``organizationId`` are used verbatim — no header
+        spoofing is allowed.
+
+    Dev / staging / emulator-running:
+        Accepts the legacy ``X-User-*`` demo headers as a fallback so the
+        local demo flow keeps working. If an Authorization header IS
+        present we still try to verify it first.
+    """
+    if authorization:
+        try:
+            identity = verify_bearer_token(authorization)
+        except InvalidIdentityError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=str(exc),
+            ) from exc
+        except TokenVerificationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=str(exc),
+                headers={"WWW-Authenticate": "Bearer"},
+            ) from exc
+        return CurrentUser(
+            uid=identity.uid,
+            name=identity.name,
+            role=identity.role,  # type: ignore[arg-type]
+            organization_id=identity.organization_id,
+        )
+
+    if settings.is_production and not settings.is_using_emulators:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authorization header required in production",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return _from_demo_headers(x_user_id, x_user_name, x_user_role, x_organization_id)
 
 
 def get_audit_writer(
