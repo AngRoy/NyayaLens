@@ -34,8 +34,12 @@ class ReweightingResult:
     rates_after: dict[str, float]
     spd_before: float
     spd_after: float
-    dir_before: float
-    dir_after: float
+    # DIR is None when the privileged-group positive rate is zero (the ratio
+    # is undefined). NaN was previously used here but serialises to invalid
+    # JSON; None becomes a clean `null` on the wire and forces the UI to
+    # render "n/a".
+    dir_before: float | None
+    dir_after: float | None
     accuracy_estimate_delta: float
 
 
@@ -120,7 +124,10 @@ def _weighted_selection_rates(
     return rates
 
 
-def _spd_dir_from_rates(rates: dict[str, float]) -> tuple[float, float]:
+def _spd_dir_from_rates(rates: dict[str, float]) -> tuple[float, float | None]:
+    """Return (SPD, DIR) where DIR is `None` if the privileged rate is zero
+    (ratio undefined) — JSON-safe alternative to `float('nan')`.
+    """
     if len(rates) < 2:
         return 0.0, 1.0
     ordered = sorted(rates.items(), key=lambda kv: (-kv[1], kv[0]))
@@ -128,7 +135,7 @@ def _spd_dir_from_rates(rates: dict[str, float]) -> tuple[float, float]:
     unprivileged = ordered[-1][1]
     spd = unprivileged - privileged
     if privileged == 0.0:
-        return spd, float("nan")
+        return spd, None
     return spd, unprivileged / privileged
 
 

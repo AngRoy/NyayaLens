@@ -12,7 +12,6 @@ Imported by:
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
@@ -70,7 +69,7 @@ def build_recourse_summary(
 
     if remediation is not None:
         aggregate["dir_after_mitigation"] = (
-            "n/a" if math.isnan(remediation.dir_after) else f"{remediation.dir_after:.2f}"
+            "n/a" if remediation.dir_after is None else f"{remediation.dir_after:.2f}"
         )
 
     how_to = (

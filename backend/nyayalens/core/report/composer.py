@@ -211,13 +211,15 @@ def build_audit_report(
     # ----- Part C: Governance record -----
     part_c: list[AuditSection] = []
     if remediation is not None:
+        dir_before = "n/a" if remediation.dir_before is None else f"{remediation.dir_before:.4f}"
+        dir_after = "n/a" if remediation.dir_after is None else f"{remediation.dir_after:.4f}"
         part_c.append(
             AuditSection(
                 heading="9. Mitigation",
                 body=[
                     "Strategy: reweighting (Kamiran/Calders 2012).",
-                    f"DIR before mitigation: {remediation.dir_before:.4f}",
-                    f"DIR after mitigation: {remediation.dir_after:.4f}",
+                    f"DIR before mitigation: {dir_before}",
+                    f"DIR after mitigation: {dir_after}",
                     f"Estimated accuracy delta: {remediation.accuracy_estimate_delta:+.4f}",
                 ],
             )

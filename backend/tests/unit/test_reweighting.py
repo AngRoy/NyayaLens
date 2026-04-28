@@ -64,3 +64,13 @@ def test_apply_reweighting_raises_for_missing_outcome_column() -> None:
     df = _binary_disparity_frame(10, 10, 10, 10)
     with pytest.raises(ValueError, match="outcome_column"):
         apply_reweighting(df, sensitive_column="sens", outcome_column="missing")
+
+
+def test_dir_before_is_none_when_privileged_rate_is_zero() -> None:
+    """Zero positive-outcome rate makes DIR undefined — must serialise as null,
+    not as JSON-invalid NaN.
+    """
+    df = _binary_disparity_frame(0, 50, 0, 50)
+    result = apply_reweighting(df, sensitive_column="sens", outcome_column="y")
+    assert result.dir_before is None
+    assert result.dir_after is None
