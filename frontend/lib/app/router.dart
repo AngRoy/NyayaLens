@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:nyayalens_client/features/audits/audit_pages.dart';
 import 'package:nyayalens_client/features/dashboard/dashboard_page.dart';
+import 'package:nyayalens_client/features/recourse/recourse_review_page.dart';
 import 'package:nyayalens_client/features/settings/settings_page.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -63,6 +64,11 @@ final routerProvider = Provider<GoRouter>((ref) {
             ],
           ),
         ],
+      ),
+      GoRoute(
+        path: '/recourse',
+        name: 'recourse-review',
+        builder: (context, state) => const RecourseReviewPage(),
       ),
       GoRoute(
         path: '/settings',

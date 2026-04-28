@@ -332,6 +332,58 @@ class RemediationResult {
   final double accuracyEstimateDelta;
 }
 
+class RecourseRequest {
+  const RecourseRequest({
+    required this.requestId,
+    required this.auditId,
+    required this.organizationId,
+    required this.applicantIdentifier,
+    required this.contactEmail,
+    required this.requestType,
+    required this.body,
+    required this.status,
+    required this.assignedToUid,
+    required this.assignedToName,
+    required this.reviewerNotes,
+    required this.createdAt,
+    required this.resolvedAt,
+  });
+
+  factory RecourseRequest.fromJson(Map<String, dynamic> json) {
+    return RecourseRequest(
+      requestId: _asString(json['request_id'], 'unknown'),
+      auditId: _asString(json['audit_id'], ''),
+      organizationId: _asString(json['organization_id'], ''),
+      applicantIdentifier: _asString(json['applicant_identifier'], 'applicant'),
+      contactEmail: _asString(json['contact_email'], ''),
+      requestType: _asString(json['request_type'], 'human_review'),
+      body: _asString(json['body'], ''),
+      status: _asString(json['status'], 'pending'),
+      assignedToUid: _nullableString(json['assigned_to_uid']),
+      assignedToName: _nullableString(json['assigned_to_name']),
+      reviewerNotes: _asString(json['reviewer_notes'], ''),
+      createdAt: _asString(json['created_at'], ''),
+      resolvedAt: _nullableString(json['resolved_at']),
+    );
+  }
+
+  final String requestId;
+  final String auditId;
+  final String organizationId;
+  final String applicantIdentifier;
+  final String contactEmail;
+  final String requestType;
+  final String body;
+  final String status;
+  final String? assignedToUid;
+  final String? assignedToName;
+  final String reviewerNotes;
+  final String createdAt;
+  final String? resolvedAt;
+
+  bool get isOpen => status == 'pending' || status == 'in_review';
+}
+
 class Tradeoff {
   const Tradeoff({
     required this.metricChosen,

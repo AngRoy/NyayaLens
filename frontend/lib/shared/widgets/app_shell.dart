@@ -184,6 +184,12 @@ class _AppNavigation extends StatelessWidget {
       selectedIcon: Icons.analytics,
     ),
     _NavigationItem(
+      label: 'Recourse',
+      route: '/recourse',
+      icon: Icons.gavel_outlined,
+      selectedIcon: Icons.gavel,
+    ),
+    _NavigationItem(
       label: 'Settings',
       route: '/settings',
       icon: Icons.tune_outlined,
