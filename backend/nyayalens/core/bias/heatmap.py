@@ -15,7 +15,7 @@ Imported by the (forthcoming) `api/audits.py` route. Tests in
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Literal
 
 import pandas as pd
@@ -123,6 +123,7 @@ def assemble_heatmap(
                         MetricResult(
                             metric=metric_name,
                             value=None,
+                            attribute=attr,
                             reliable=False,
                             reason=(
                                 "Calibration requires probability scores; "
@@ -150,6 +151,7 @@ def assemble_heatmap(
                         MetricResult(
                             metric=metric_name,
                             value=None,
+                            attribute=attr,
                             reliable=False,
                             reason="Consistency requires numeric feature columns.",
                         )
@@ -166,7 +168,7 @@ def assemble_heatmap(
                     continue
                 kwargs["features"] = df[numeric_features]
 
-            result = fn(**kwargs)
+            result = replace(fn(**kwargs), attribute=attr)
             detailed.append(result)
             severity = grade(metric_name, result, t)
             cells.append(

@@ -42,6 +42,7 @@ from nyayalens.api.deps import (
     get_storage,
 )
 from nyayalens.api.state import AppState, StoredAudit
+from nyayalens.config import Settings, get_settings
 from nyayalens.core._contracts.llm import LLMClient, LLMPayload, StrictPayload
 from nyayalens.core._contracts.storage import StorageClient
 from nyayalens.core.bias.conflicts import detect_conflicts
@@ -155,6 +156,7 @@ async def detect_schema(
     privacy: Annotated[PrivacyFilter, Depends(get_privacy_filter)],
     llm: Annotated[LLMClient, Depends(get_llm)],
     domain: Annotated[HiringDomain, Depends(get_domain)],
+    settings: Annotated[Settings, Depends(get_settings)],
     user: Annotated[CurrentUser, Depends(get_current_user)],
     audit: Annotated[AuditWriter, Depends(get_audit_writer)],
 ) -> DetectSchemaResponse:
@@ -162,22 +164,24 @@ async def detect_schema(
     ds = state.get_dataset(dataset_id)
     if ds is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="dataset not found")
-    detector = SchemaDetector(llm, privacy)
-    try:
-        result = await detector.detect(
-            ds.parsed,
-            domain=domain.name,
-            narrative_context=domain.schema_hint,
-        )
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Schema detection failed: {exc}",
-        ) from exc
+    detector = SchemaDetector(
+        llm,
+        privacy,
+        llm_timeout_seconds=settings.schema_detection_llm_timeout_seconds,
+    )
+    result = await detector.detect(
+        ds.parsed,
+        domain=domain.name,
+        narrative_context=domain.schema_hint,
+    )
 
     await audit.write(
         "schema_detected",
-        details={"dataset_id": dataset_id, "needs_review": result.needs_review},
+        details={
+            "dataset_id": dataset_id,
+            "needs_review": result.needs_review,
+            "schema_source": result.raw_response.get("_source", "llm"),
+        },
     )
     return DetectSchemaResponse(
         dataset_id=dataset_id,
@@ -322,6 +326,7 @@ class AuditDetailResponse(BaseModel):
 def _metric_to_dict(m: Any) -> dict[str, Any]:
     return {
         "metric": m.metric,
+        "attribute": m.attribute,
         "value": m.value,
         "threshold": m.threshold,
         "threshold_direction": m.threshold_direction,
@@ -502,7 +507,10 @@ async def analyze_audit(
         return outcome.payload
 
     for attr in sensitive:
-        result = next((r for r in heatmap.detailed if r.metric == "dir"), None)
+        result = next(
+            (r for r in heatmap.detailed if r.metric == "dir" and r.attribute == attr),
+            None,
+        )
         if result is None:
             continue
         meta = METRICS["dir"]

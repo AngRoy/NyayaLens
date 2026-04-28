@@ -67,6 +67,7 @@ class MetricResult:
 
     metric: str
     value: float | None
+    attribute: str = ""
     group_values: dict[str, float] = field(default_factory=dict)
     privileged: str | None = None
     unprivileged: str | None = None
