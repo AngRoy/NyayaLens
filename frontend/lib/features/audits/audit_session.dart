@@ -25,6 +25,7 @@ class AuditSession extends ChangeNotifier {
   String? _fileName;
   String? _datasetId;
   SchemaDetection? _schema;
+  DataQuality? _quality;
   AuditDetail? _audit;
   bool _busy = false;
   String? _busyLabel;
@@ -33,6 +34,7 @@ class AuditSession extends ChangeNotifier {
   String? get fileName => _fileName;
   String? get datasetId => _datasetId;
   SchemaDetection? get schema => _schema;
+  DataQuality? get quality => _quality;
   AuditDetail? get audit => _audit;
   bool get busy => _busy;
   String? get busyLabel => _busyLabel;
@@ -63,6 +65,7 @@ class AuditSession extends ChangeNotifier {
     _fileName = file.name;
     _datasetId = null;
     _schema = null;
+    _quality = null;
     _audit = null;
     _error = null;
     notifyListeners();
@@ -78,6 +81,10 @@ class AuditSession extends ChangeNotifier {
       if (_datasetId == null) {
         throw ApiException('Upload completed without a dataset id.');
       }
+      final qualityJson = upload['quality'];
+      _quality = qualityJson is Map<Object?, Object?>
+          ? DataQuality.fromJson(Map<String, dynamic>.from(qualityJson))
+          : null;
       _schema = SchemaDetection.fromJson(await api.detectSchema(_datasetId!));
     });
   }
@@ -157,6 +164,7 @@ class AuditSession extends ChangeNotifier {
     _fileName = null;
     _datasetId = null;
     _schema = null;
+    _quality = null;
     _audit = null;
     _busy = false;
     _busyLabel = null;

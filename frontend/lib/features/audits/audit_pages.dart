@@ -8,6 +8,7 @@ import 'package:nyayalens_client/shared/models/audit_models.dart';
 import 'package:nyayalens_client/shared/platform/url_opener.dart';
 import 'package:nyayalens_client/shared/widgets/app_shell.dart';
 import 'package:nyayalens_client/shared/widgets/bias_heatmap.dart';
+import 'package:nyayalens_client/shared/widgets/data_quality_chip.dart';
 import 'package:nyayalens_client/shared/widgets/nyaya_surface.dart';
 
 enum AuditWorkspaceTab { overview, remediation, signoff, report }
@@ -38,6 +39,10 @@ class NewAuditPage extends ConsumerWidget {
           ),
         if (session.busy) _BusyPanel(label: session.busyLabel),
         _UploadPanel(session: session),
+        if (session.quality != null) ...[
+          const SizedBox(height: 18),
+          DataQualityChip(quality: session.quality!),
+        ],
         if (session.schema != null) _SchemaReviewPanel(session: session),
       ],
     );

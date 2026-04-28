@@ -327,6 +327,40 @@ class RemediationResult {
   final double accuracyEstimateDelta;
 }
 
+class DataQuality {
+  const DataQuality({
+    required this.rowCount,
+    required this.columnCount,
+    required this.missingCellPct,
+    required this.duplicateRowPct,
+    required this.typeConsistencyPct,
+    required this.overallScore,
+    required this.warnings,
+  });
+
+  factory DataQuality.fromJson(Map<String, dynamic> json) {
+    return DataQuality(
+      rowCount: (_asDouble(json['row_count']) ?? 0).toInt(),
+      columnCount: (_asDouble(json['column_count']) ?? 0).toInt(),
+      missingCellPct: _asDouble(json['missing_cell_pct']) ?? 0,
+      duplicateRowPct: _asDouble(json['duplicate_row_pct']) ?? 0,
+      typeConsistencyPct: _asDouble(json['type_consistency_pct']) ?? 1,
+      overallScore: _asDouble(json['overall_score']) ?? 0,
+      warnings: _asStringList(json['warnings']),
+    );
+  }
+
+  final int rowCount;
+  final int columnCount;
+  final double missingCellPct;
+  final double duplicateRowPct;
+  final double typeConsistencyPct;
+  final double overallScore;
+  final List<String> warnings;
+
+  bool get hasWarnings => warnings.isNotEmpty;
+}
+
 class SignOff {
   const SignOff({
     required this.reviewerName,
