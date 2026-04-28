@@ -23,6 +23,7 @@ dependencies:
 
   # HTTP client (Firebase-Auth token interceptor lives in shared/api_client/)
   dio: ^5.7.0
+  web: ^1.1.1
 
   # Models & serialisation
   freezed_annotation: ^3.1.0

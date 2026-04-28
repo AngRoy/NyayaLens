@@ -1,14 +1,9 @@
-// GoRouter configuration.
-//
-// Screens map 1:1 to the design doc §12 inventory. Week-1 scope is S01
-// (landing), S02 (home), S03 (upload wizard); remaining screens follow in
-// weeks 2–3. Each feature lives under `lib/features/<slug>/`.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:nyayalens_client/features/demo/demo_flow.dart';
+import 'package:nyayalens_client/features/audits/audit_pages.dart';
+import 'package:nyayalens_client/features/dashboard/dashboard_page.dart';
+import 'package:nyayalens_client/features/settings/settings_page.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -16,57 +11,64 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: <RouteBase>[
       GoRoute(
         path: '/',
-        name: 'landing',
-        builder: (context, state) => const _Landing(),
+        name: 'dashboard',
+        builder: (context, state) => const DashboardPage(),
       ),
       GoRoute(
         path: '/demo',
-        name: 'demo',
-        builder: (context, state) => const DemoFlowScreen(),
+        redirect: (context, state) => '/audits/new',
+      ),
+      GoRoute(
+        path: '/audits',
+        name: 'audits',
+        builder: (context, state) => const AuditsIndexPage(),
+        routes: [
+          GoRoute(
+            path: 'new',
+            name: 'new-audit',
+            builder: (context, state) => const NewAuditPage(),
+          ),
+          GoRoute(
+            path: ':auditId',
+            name: 'audit-overview',
+            builder: (context, state) => AuditWorkspacePage(
+              auditId: state.pathParameters['auditId'] ?? '',
+              tab: AuditWorkspaceTab.overview,
+            ),
+            routes: [
+              GoRoute(
+                path: 'remediation',
+                name: 'audit-remediation',
+                builder: (context, state) => AuditWorkspacePage(
+                  auditId: state.pathParameters['auditId'] ?? '',
+                  tab: AuditWorkspaceTab.remediation,
+                ),
+              ),
+              GoRoute(
+                path: 'signoff',
+                name: 'audit-signoff',
+                builder: (context, state) => AuditWorkspacePage(
+                  auditId: state.pathParameters['auditId'] ?? '',
+                  tab: AuditWorkspaceTab.signoff,
+                ),
+              ),
+              GoRoute(
+                path: 'report',
+                name: 'audit-report',
+                builder: (context, state) => AuditWorkspacePage(
+                  auditId: state.pathParameters['auditId'] ?? '',
+                  tab: AuditWorkspaceTab.report,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      GoRoute(
+        path: '/settings',
+        name: 'settings',
+        builder: (context, state) => const SettingsPage(),
       ),
     ],
   );
 });
-
-class _Landing extends StatelessWidget {
-  const _Landing();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('NyayaLens')),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'NyayaLens — The Eye of Justice',
-                style: Theme.of(context).textTheme.headlineMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              const SizedBox(
-                width: 520,
-                child: Text(
-                  'AI accountability for hiring fairness. Upload a dataset, '
-                  'detect sensitive attributes, run five fairness metrics, '
-                  'apply reweighting, sign off, and download an audit '
-                  'report — all with a documented human-in-the-loop trail.',
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              const SizedBox(height: 32),
-              FilledButton.icon(
-                onPressed: () => context.go('/demo'),
-                icon: const Icon(Icons.play_arrow),
-                label: const Text('Start audit demo'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}

@@ -3,12 +3,18 @@
   "short_name": "NyayaLens",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#1E2A44",
-  "theme_color": "#1E2A44",
+  "background_color": "#18212F",
+  "theme_color": "#167A7F",
   "description": "AI accountability for hiring fairness.",
   "orientation": "portrait-primary",
   "prefer_related_applications": false,
   "icons": [
+    {
+      "src": "icons/nyayalens-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
     {
       "src": "icons/Icon-192.png",
       "sizes": "192x192",

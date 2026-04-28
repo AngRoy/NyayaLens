@@ -90,9 +90,9 @@ class ApiClient {
   Future<Map<String, dynamic>> createAudit(Map<String, dynamic> body) =>
       _post('/audits', data: body);
 
-  Future<List<dynamic>> listAudits() async {
+  Future<List<Object?>> listAudits() async {
     final r = await _dio.get('/audits');
-    return r.data as List<dynamic>;
+    return _jsonList(r.data);
   }
 
   Future<Map<String, dynamic>> getAudit(String auditId) =>
@@ -158,9 +158,9 @@ class ApiClient {
   ) =>
       _post('/audits/$auditId/recourse-summary', data: body);
 
-  Future<List<dynamic>> auditTrail() async {
+  Future<List<Object?>> auditTrail() async {
     final r = await _dio.get('/audit-trail');
-    return r.data as List<dynamic>;
+    return _jsonList(r.data);
   }
 
   // ---- Internals ----------------------------------------------------
@@ -168,7 +168,7 @@ class ApiClient {
   Future<Map<String, dynamic>> _get(String path) async {
     try {
       final r = await _dio.get(path);
-      return Map<String, dynamic>.from(r.data as Map);
+      return _jsonMap(r.data);
     } on DioException catch (e) {
       throw _toApiException(e);
     }
@@ -177,7 +177,7 @@ class ApiClient {
   Future<Map<String, dynamic>> _post(String path, {Object? data}) async {
     try {
       final r = await _dio.post(path, data: data);
-      return Map<String, dynamic>.from(r.data as Map);
+      return _jsonMap(r.data);
     } on DioException catch (e) {
       throw _toApiException(e);
     }
@@ -185,10 +185,21 @@ class ApiClient {
 
   ApiException _toApiException(DioException e) {
     final status = e.response?.statusCode;
-    final detail = e.response?.data is Map
-        ? (e.response!.data as Map)['detail']?.toString() ?? e.message
+    final data = e.response?.data;
+    final detail = data is Map<Object?, Object?>
+        ? data['detail']?.toString() ?? e.message
         : e.message;
     return ApiException(detail ?? 'Network error', status);
+  }
+
+  Map<String, dynamic> _jsonMap(Object? data) {
+    if (data is Map<Object?, Object?>) return Map<String, dynamic>.from(data);
+    throw ApiException('Unexpected API response shape');
+  }
+
+  List<Object?> _jsonList(Object? data) {
+    if (data is List<Object?>) return data;
+    throw ApiException('Unexpected API response shape');
   }
 }
 
