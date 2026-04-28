@@ -49,12 +49,12 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Export JSON schemas
-        # `nyayalens.models.api.export_schemas` (added in Week 2) walks the
-        # Pydantic DTOs and writes them to shared/schemas/*.json.
+        # `scripts/export_schemas.py` walks every Pydantic DTO re-exported
+        # by `nyayalens.models.api` and writes them to shared/schemas/.
         run: |
           mkdir -p ../shared/schemas
-          echo "TODO: scripts/export_schemas.py to be added in Week 2 alongside api/ DTOs."
-          # python scripts/export_schemas.py --out ../shared/schemas
+          python scripts/export_schemas.py --out ../shared/schemas
+          ls -la ../shared/schemas
 
       - name: Upload schema artifacts
         uses: actions/upload-artifact@v4
@@ -88,6 +88,7 @@ jobs:
         run: flutter pub get
 
       - name: Run contract parser tests
-        run: |
-          echo "TODO: flutter test test/contract/ to be added in Week 2."
-          # flutter test test/contract/
+        # `test/contract/` loads each JSON Schema artifact and asserts the
+        # well-known DTOs still expose the field names the Flutter client
+        # parses. Drift fails CI immediately rather than at runtime.
+        run: flutter test test/contract/ --no-pub
