@@ -124,6 +124,7 @@ class AuditDetail {
     required this.proxies,
     required this.remediation,
     required this.signOff,
+    required this.tradeoff,
     required this.hasReport,
   });
 
@@ -144,6 +145,9 @@ class AuditDetail {
           : RemediationResult.fromJson(_asMap(json['remediation'])),
       signOff:
           json['sign_off'] == null ? null : SignOff.fromJson(_asMap(json['sign_off'])),
+      tradeoff: json['tradeoff'] == null
+          ? null
+          : Tradeoff.fromJson(_asMap(json['tradeoff'])),
       hasReport: json['has_report'] == true,
     );
   }
@@ -158,6 +162,7 @@ class AuditDetail {
   final List<ProxyFlag> proxies;
   final RemediationResult? remediation;
   final SignOff? signOff;
+  final Tradeoff? tradeoff;
   final bool hasReport;
 
   String get id => summary.id;
@@ -325,6 +330,121 @@ class RemediationResult {
   final double? spdBefore;
   final double? spdAfter;
   final double accuracyEstimateDelta;
+}
+
+class RecourseRequest {
+  const RecourseRequest({
+    required this.requestId,
+    required this.auditId,
+    required this.organizationId,
+    required this.applicantIdentifier,
+    required this.contactEmail,
+    required this.requestType,
+    required this.body,
+    required this.status,
+    required this.assignedToUid,
+    required this.assignedToName,
+    required this.reviewerNotes,
+    required this.createdAt,
+    required this.resolvedAt,
+  });
+
+  factory RecourseRequest.fromJson(Map<String, dynamic> json) {
+    return RecourseRequest(
+      requestId: _asString(json['request_id'], 'unknown'),
+      auditId: _asString(json['audit_id'], ''),
+      organizationId: _asString(json['organization_id'], ''),
+      applicantIdentifier: _asString(json['applicant_identifier'], 'applicant'),
+      contactEmail: _asString(json['contact_email'], ''),
+      requestType: _asString(json['request_type'], 'human_review'),
+      body: _asString(json['body'], ''),
+      status: _asString(json['status'], 'pending'),
+      assignedToUid: _nullableString(json['assigned_to_uid']),
+      assignedToName: _nullableString(json['assigned_to_name']),
+      reviewerNotes: _asString(json['reviewer_notes'], ''),
+      createdAt: _asString(json['created_at'], ''),
+      resolvedAt: _nullableString(json['resolved_at']),
+    );
+  }
+
+  final String requestId;
+  final String auditId;
+  final String organizationId;
+  final String applicantIdentifier;
+  final String contactEmail;
+  final String requestType;
+  final String body;
+  final String status;
+  final String? assignedToUid;
+  final String? assignedToName;
+  final String reviewerNotes;
+  final String createdAt;
+  final String? resolvedAt;
+
+  bool get isOpen => status == 'pending' || status == 'in_review';
+}
+
+class Tradeoff {
+  const Tradeoff({
+    required this.metricChosen,
+    required this.justification,
+    required this.conflictsAcknowledged,
+    required this.selectedByUid,
+    required this.selectedByName,
+    required this.selectedAt,
+  });
+
+  factory Tradeoff.fromJson(Map<String, dynamic> json) {
+    return Tradeoff(
+      metricChosen: _asString(json['metric_chosen'], 'metric'),
+      justification: _asString(json['justification'], ''),
+      conflictsAcknowledged: _asStringList(json['conflicts_acknowledged']),
+      selectedByUid: _asString(json['selected_by_uid'], ''),
+      selectedByName: _asString(json['selected_by_name'], 'Reviewer'),
+      selectedAt: _asString(json['selected_at'], ''),
+    );
+  }
+
+  final String metricChosen;
+  final String justification;
+  final List<String> conflictsAcknowledged;
+  final String selectedByUid;
+  final String selectedByName;
+  final String selectedAt;
+}
+
+class DataQuality {
+  const DataQuality({
+    required this.rowCount,
+    required this.columnCount,
+    required this.missingCellPct,
+    required this.duplicateRowPct,
+    required this.typeConsistencyPct,
+    required this.overallScore,
+    required this.warnings,
+  });
+
+  factory DataQuality.fromJson(Map<String, dynamic> json) {
+    return DataQuality(
+      rowCount: (_asDouble(json['row_count']) ?? 0).toInt(),
+      columnCount: (_asDouble(json['column_count']) ?? 0).toInt(),
+      missingCellPct: _asDouble(json['missing_cell_pct']) ?? 0,
+      duplicateRowPct: _asDouble(json['duplicate_row_pct']) ?? 0,
+      typeConsistencyPct: _asDouble(json['type_consistency_pct']) ?? 1,
+      overallScore: _asDouble(json['overall_score']) ?? 0,
+      warnings: _asStringList(json['warnings']),
+    );
+  }
+
+  final int rowCount;
+  final int columnCount;
+  final double missingCellPct;
+  final double duplicateRowPct;
+  final double typeConsistencyPct;
+  final double overallScore;
+  final List<String> warnings;
+
+  bool get hasWarnings => warnings.isNotEmpty;
 }
 
 class SignOff {

@@ -8,6 +8,7 @@ import 'package:nyayalens_client/shared/models/audit_models.dart';
 import 'package:nyayalens_client/shared/platform/url_opener.dart';
 import 'package:nyayalens_client/shared/widgets/app_shell.dart';
 import 'package:nyayalens_client/shared/widgets/bias_heatmap.dart';
+import 'package:nyayalens_client/shared/widgets/data_quality_chip.dart';
 import 'package:nyayalens_client/shared/widgets/nyaya_surface.dart';
 
 enum AuditWorkspaceTab { overview, remediation, signoff, report }
@@ -38,6 +39,10 @@ class NewAuditPage extends ConsumerWidget {
           ),
         if (session.busy) _BusyPanel(label: session.busyLabel),
         _UploadPanel(session: session),
+        if (session.quality != null) ...[
+          const SizedBox(height: 18),
+          DataQualityChip(quality: session.quality!),
+        ],
         if (session.schema != null) _SchemaReviewPanel(session: session),
       ],
     );
@@ -366,6 +371,13 @@ class _WorkspaceActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (audit.summary.mode == 'probe') {
+      return const StatusBadge(
+        label: 'Probe mode · lifecycle actions disabled',
+        tone: BadgeTone.info,
+        icon: Icons.science_outlined,
+      );
+    }
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -447,7 +459,132 @@ class _AuditOverview extends StatelessWidget {
         _HeatmapPanel(audit: audit),
         const SizedBox(height: 18),
         _FindingsPanel(audit: audit),
+        if (audit.conflicts.isNotEmpty || audit.tradeoff != null) ...[
+          const SizedBox(height: 18),
+          _TradeoffPanel(audit: audit),
+        ],
       ],
+    );
+  }
+}
+
+class _TradeoffPanel extends ConsumerStatefulWidget {
+  const _TradeoffPanel({required this.audit});
+
+  final AuditDetail audit;
+
+  @override
+  ConsumerState<_TradeoffPanel> createState() => _TradeoffPanelState();
+}
+
+class _TradeoffPanelState extends ConsumerState<_TradeoffPanel> {
+  String? _selectedMetric;
+  final _justificationController = TextEditingController();
+
+  @override
+  void dispose() {
+    _justificationController.dispose();
+    super.dispose();
+  }
+
+  List<String> get _metricsInConflict {
+    final metrics = <String>{};
+    for (final conflict in widget.audit.conflicts) {
+      metrics.add(conflict.metricA);
+      metrics.add(conflict.metricB);
+    }
+    return metrics.toList()..sort();
+  }
+
+  String _conflictId(AuditConflict c) => '${c.metricA}-vs-${c.metricB}';
+
+  @override
+  Widget build(BuildContext context) {
+    final tradeoff = widget.audit.tradeoff;
+    if (tradeoff != null) {
+      return SurfacePanel(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SectionHeader(
+              title: 'Tradeoff resolved',
+              subtitle: 'Recorded reviewer decision when fairness metrics disagreed.',
+              trailing: StatusBadge(
+                label: 'Chose ${tradeoff.metricChosen.toUpperCase()}',
+                tone: BadgeTone.good,
+                icon: Icons.fact_check_outlined,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(tradeoff.justification),
+            const SizedBox(height: 8),
+            Text(
+              'Selected by ${tradeoff.selectedByName} · ${tradeoff.selectedAt}',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ],
+        ),
+      );
+    }
+    final session = ref.watch(auditSessionProvider);
+    final metrics = _metricsInConflict;
+    final justificationOk = _justificationController.text.trim().length >= 10;
+    final canSubmit = _selectedMetric != null && justificationOk && !session.busy;
+    return SurfacePanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SectionHeader(
+            title: 'Resolve metric conflict',
+            subtitle:
+                'Fairness metrics disagree. Pick the metric you are prioritising and document why.',
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final metric in metrics)
+                ChoiceChip(
+                  selected: _selectedMetric == metric,
+                  label: Text(metric.toUpperCase()),
+                  onSelected: (_) => setState(() => _selectedMetric = metric),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _justificationController,
+            maxLines: 3,
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(
+              labelText: 'Why prioritise this metric? (10 char minimum)',
+            ),
+          ),
+          const SizedBox(height: 14),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: canSubmit
+                  ? () async {
+                      await session.applyTradeoff(
+                        ref.read(apiClientProvider),
+                        metricChosen: _selectedMetric!,
+                        justification: _justificationController.text.trim(),
+                        conflictsAcknowledged:
+                            widget.audit.conflicts.map(_conflictId).toList(),
+                      );
+                      ref.invalidate(auditSummariesProvider);
+                    }
+                  : null,
+              icon: const Icon(Icons.gavel_outlined),
+              label: const Text('Record tradeoff'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

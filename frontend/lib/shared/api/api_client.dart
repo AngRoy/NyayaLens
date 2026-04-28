@@ -123,6 +123,21 @@ class ApiClient {
         data: {'notes': notes, 'confirmed': true},
       );
 
+  Future<Map<String, dynamic>> tradeoffAudit(
+    String auditId, {
+    required String metricChosen,
+    required String justification,
+    required List<String> conflictsAcknowledged,
+  }) =>
+      _post(
+        '/audits/$auditId/tradeoff',
+        data: {
+          'metric_chosen': metricChosen,
+          'justification': justification,
+          'conflicts_acknowledged': conflictsAcknowledged,
+        },
+      );
+
   // ---- Reports ------------------------------------------------------
 
   Future<Map<String, dynamic>> generateReport(String auditId) =>
@@ -157,6 +172,38 @@ class ApiClient {
     Map<String, dynamic> body,
   ) =>
       _post('/audits/$auditId/recourse-summary', data: body);
+
+  Future<List<Object?>> listRecourseRequests() async {
+    try {
+      final r = await _dio.get('/recourse-requests');
+      final body = _jsonMap(r.data);
+      final requests = body['requests'];
+      if (requests is List<Object?>) return requests;
+      return const <Object?>[];
+    } on DioException catch (e) {
+      throw _toApiException(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> assignRecourse(
+    String requestId, {
+    required String assigneeUid,
+    required String assigneeName,
+  }) =>
+      _post(
+        '/recourse-requests/$requestId/assign',
+        data: {'assignee_uid': assigneeUid, 'assignee_name': assigneeName},
+      );
+
+  Future<Map<String, dynamic>> resolveRecourse(
+    String requestId, {
+    required String resolution,
+    required String reviewerNotes,
+  }) =>
+      _post(
+        '/recourse-requests/$requestId/resolve',
+        data: {'resolution': resolution, 'reviewer_notes': reviewerNotes},
+      );
 
   Future<List<Object?>> auditTrail() async {
     final r = await _dio.get('/audit-trail');

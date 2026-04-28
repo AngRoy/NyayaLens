@@ -25,6 +25,7 @@ class AuditSession extends ChangeNotifier {
   String? _fileName;
   String? _datasetId;
   SchemaDetection? _schema;
+  DataQuality? _quality;
   AuditDetail? _audit;
   bool _busy = false;
   String? _busyLabel;
@@ -33,6 +34,7 @@ class AuditSession extends ChangeNotifier {
   String? get fileName => _fileName;
   String? get datasetId => _datasetId;
   SchemaDetection? get schema => _schema;
+  DataQuality? get quality => _quality;
   AuditDetail? get audit => _audit;
   bool get busy => _busy;
   String? get busyLabel => _busyLabel;
@@ -63,6 +65,7 @@ class AuditSession extends ChangeNotifier {
     _fileName = file.name;
     _datasetId = null;
     _schema = null;
+    _quality = null;
     _audit = null;
     _error = null;
     notifyListeners();
@@ -78,6 +81,10 @@ class AuditSession extends ChangeNotifier {
       if (_datasetId == null) {
         throw ApiException('Upload completed without a dataset id.');
       }
+      final qualityJson = upload['quality'];
+      _quality = qualityJson is Map<Object?, Object?>
+          ? DataQuality.fromJson(Map<String, dynamic>.from(qualityJson))
+          : null;
       _schema = SchemaDetection.fromJson(await api.detectSchema(_datasetId!));
     });
   }
@@ -143,6 +150,26 @@ class AuditSession extends ChangeNotifier {
     });
   }
 
+  Future<void> applyTradeoff(
+    ApiClient api, {
+    required String metricChosen,
+    required String justification,
+    required List<String> conflictsAcknowledged,
+  }) async {
+    final audit = _audit;
+    if (audit == null) return;
+    await _run('Recording metric tradeoff', () async {
+      _audit = AuditDetail.fromJson(
+        await api.tradeoffAudit(
+          audit.id,
+          metricChosen: metricChosen,
+          justification: justification,
+          conflictsAcknowledged: conflictsAcknowledged,
+        ),
+      );
+    });
+  }
+
   Future<void> generateReport(ApiClient api) async {
     final audit = _audit;
     if (audit == null) return;
@@ -157,6 +184,7 @@ class AuditSession extends ChangeNotifier {
     _fileName = null;
     _datasetId = null;
     _schema = null;
+    _quality = null;
     _audit = null;
     _busy = false;
     _busyLabel = null;
@@ -190,6 +218,10 @@ String friendlyApiError(Object error) {
   if (error is ApiException) {
     final status = error.status;
     if (status == 404) return 'That audit is not available in the local backend.';
+    if (status == 409 && error.message.toLowerCase().contains('probe')) {
+      return 'This audit is in probe mode. Lifecycle actions like analyze, '
+          'remediate, sign-off, and report are reserved for full audit mode.';
+    }
     if (status == 502 || status == 503) {
       return 'The analysis service is temporarily unavailable. Retry after the backend settles.';
     }
