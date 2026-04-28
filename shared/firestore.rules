@@ -58,13 +58,15 @@ service cloud.firestore {
                     request.auth.token.organizationId == request.resource.data.organizationId &&
                     request.auth.token.role in ["admin","analyst"];
 
-      // Signoff transitions audits to a frozen state; once signedOff is set,
-      // only admins may modify (and even they should avoid it).
+      // Signoff transitions audits to a frozen state; once signed_off is
+      // set, NO client (including admins) may modify the document. If a
+      // legal hold or correction is required it is performed via service
+      // account migration which writes a NEW audit_trail event explaining
+      // why.
       allow update: if isSignedIn() &&
                     request.auth.token.organizationId == resource.data.organizationId &&
                     request.auth.token.role in ["admin","analyst","reviewer"] &&
-                    (resource.data.status != "signed_off" ||
-                     request.auth.token.role == "admin");
+                    resource.data.status != "signed_off";
 
       allow delete: if hasAnyRole(resource.data.organizationId, ["admin"]);
     }
@@ -74,10 +76,11 @@ service cloud.firestore {
       allow read: if isSignedIn() &&
                   request.auth.token.organizationId == resource.data.organizationId;
 
-      // Any authenticated org member can append via the backend pipeline.
-      // Clients cannot write directly — backend service account does it.
-      allow create: if isSignedIn() &&
-                    request.auth.token.organizationId == request.resource.data.organizationId;
+      // Audit-trail integrity is a load-bearing invariant (ADR 0004): only
+      // the backend service account may append. Service-account writes
+      // bypass these rules; client writes are rejected outright so events
+      // cannot be forged by an authenticated org member.
+      allow create: if false;
 
       allow update: if false;
       allow delete: if false;
