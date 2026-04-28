@@ -50,7 +50,10 @@ class PerturbationProbeResult:
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
-_SCORE_RE = re.compile(r"\b([0-9](?:\.[0-9]+)?|10(?:\.0+)?)\b")
+_LABELLED_SCORE_RE = re.compile(
+    r"score\s*[:=]\s*(10(?:\.0+)?|[0-9](?:\.[0-9]+)?)\b",
+    re.IGNORECASE,
+)
 _FLAG_PHRASES = (
     "soft skills",
     "cultural fit",
@@ -95,20 +98,22 @@ def _render_prompt(
 
 
 def _extract_score(text: str) -> float | None:
-    """Best-effort score extraction. Looks for 'Score: X' first, then any 1-10 number."""
-    m = re.search(r"score\s*[:=]\s*(10(?:\.0+)?|[0-9](?:\.[0-9]+)?)", text, re.IGNORECASE)
-    if m:
-        try:
-            return float(m.group(1))
-        except ValueError:
-            pass
-    m2 = _SCORE_RE.search(text)
-    if m2:
-        try:
-            return float(m2.group(1))
-        except ValueError:
-            return None
-    return None
+    """Score extraction — requires the labelled `Score: X` / `Score = X` form.
+
+    The probe's prompt explicitly asks the LLM to put the score on its own
+    line as `Score: X`; un-labelled fallback regexes used to capture noise
+    digits (e.g. years of experience). We refuse to guess.
+    """
+    match = _LABELLED_SCORE_RE.search(text)
+    if not match:
+        return None
+    try:
+        score = float(match.group(1))
+    except ValueError:
+        return None
+    if score < 0.0 or score > 10.0:
+        return None
+    return score
 
 
 def _flagged(text: str) -> list[str]:
