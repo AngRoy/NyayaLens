@@ -14,6 +14,7 @@ Imported by:
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import uuid4
@@ -187,6 +188,7 @@ async def upload_dataset(
             for c in parsed.columns
         ],
         sample_rows=parsed.sample_rows,
+        quality=asdict(parsed.quality) if parsed.quality is not None else None,
     )
 
 

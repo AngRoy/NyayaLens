@@ -31,6 +31,7 @@ class DatasetUploadWireResponse(BaseModel):
     column_count: int
     columns: list[dict[str, Any]]
     sample_rows: list[dict[str, Any]]
+    quality: dict[str, Any] | None = None
 
 
 class DetectSchemaWireResponse(BaseModel):
