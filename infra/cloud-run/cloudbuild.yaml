@@ -21,17 +21,22 @@ steps:
       - --all-tags
       - gcr.io/$PROJECT_ID/nyayalens-api
 
+  # Substitute ${IMAGE} in the SHA-pinned service manifest and apply it.
+  # Keeps the manifest the single source of truth (resources, scaling,
+  # env vars, secrets) instead of letting `gcloud run deploy` flags drift.
   - id: deploy
     name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
-    entrypoint: gcloud
+    entrypoint: bash
     args:
-      - run
-      - deploy
-      - nyayalens-api
-      - --image=gcr.io/$PROJECT_ID/nyayalens-api:$SHORT_SHA
-      - --region=asia-south1
-      - --platform=managed
-      - --allow-unauthenticated
+      - -c
+      - |
+        set -e
+        apt-get update && apt-get install -y --no-install-recommends gettext-base
+        export IMAGE="gcr.io/$PROJECT_ID/nyayalens-api:$SHORT_SHA"
+        envsubst < infra/cloud-run/service.yaml > /workspace/service-rendered.yaml
+        gcloud run services replace /workspace/service-rendered.yaml \
+          --region=asia-south1 \
+          --platform=managed
 
 images:
   - gcr.io/$PROJECT_ID/nyayalens-api:$SHORT_SHA

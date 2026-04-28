@@ -1,11 +1,15 @@
 # NyayaLens API — Cloud Run service manifest.
 #
-# Deploy:
-#   gcloud run services replace infra/cloud-run/service.yaml \
+# Deploy (image must be SHA-pinned — never apply this raw):
+#   IMAGE=gcr.io/nyayalens/nyayalens-api:$(git rev-parse --short HEAD) \
+#     envsubst < infra/cloud-run/service.yaml | \
+#     gcloud run services replace - \
 #       --region=asia-south1 \
 #       --project=nyayalens
 #
-# The image is published by Cloud Build before this manifest is applied.
+# The Cloud Build pipeline (infra/cloud-run/cloudbuild.yaml) substitutes
+# IMAGE itself on push-to-main; this file documents the manual flow used
+# for ad-hoc rollbacks.
 
 apiVersion: serving.knative.dev/v1
 kind: Service
@@ -30,7 +34,7 @@ spec:
       serviceAccountName: nyayalens-api@nyayalens.iam.gserviceaccount.com
       containers:
         - name: api
-          image: gcr.io/nyayalens/nyayalens-api:latest
+          image: ${IMAGE}
           ports:
             - containerPort: 8080
           resources:
