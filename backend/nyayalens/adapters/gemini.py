@@ -1,11 +1,12 @@
 """Gemini API adapter — concrete `LLMClient` implementing ADR 0005.
 
-Accepts only typed `LLMPayload` envelopes; raw strings raise a runtime
-TypeError (mypy catches them earlier). Every call emits a `PrivacyLogEntry`
-to the injected audit sink.
+Backed by the `google-genai` SDK (the maintained successor to the
+deprecated `google-generativeai`). Accepts only typed `LLMPayload`
+envelopes; raw strings raise a runtime TypeError (mypy catches them
+earlier). Every call emits a `PrivacyLogEntry` to the injected audit sink.
 
 Imported by:
-- `api/deps.py` (forthcoming) — production dependency wiring
+- `api/deps.py` — production dependency wiring
 - never by `core/` (forbidden by ADR 0001 / `tests/contract/test_import_graph.py`)
 """
 
@@ -18,7 +19,8 @@ import time
 from typing import Any
 from uuid import uuid4
 
-import google.generativeai as _genai
+from google import genai
+from google.genai import types as genai_types
 from tenacity import (
     AsyncRetrying,
     retry_if_exception_type,
@@ -37,7 +39,6 @@ from nyayalens.core._contracts.llm import (
 )
 
 log = logging.getLogger(__name__)
-genai: Any = _genai
 
 
 class GeminiCallError(RuntimeError):
@@ -69,14 +70,14 @@ def _payload_to_text(payload: LLMPayload) -> str:
 
 
 class GeminiAdapter(LLMClient):
-    """`LLMClient` backed by `google-generativeai`."""
+    """`LLMClient` backed by `google-genai`."""
 
     def __init__(
         self,
         *,
         api_key: str,
-        text_model: str = "gemini-flash-latest",
-        structured_model: str = "gemini-pro-latest",
+        text_model: str = "gemini-2.5-flash",
+        structured_model: str = "gemini-2.5-pro",
         temperature: float = 0.2,
         audit_sink: AuditSink | None = None,
         organization_id: str = "",
@@ -84,15 +85,13 @@ class GeminiAdapter(LLMClient):
     ) -> None:
         if not api_key:
             raise ValueError("GeminiAdapter requires a non-empty api_key.")
-        genai.configure(api_key=api_key)
-        self._text_model = genai.GenerativeModel(text_model)
-        self._structured_model = genai.GenerativeModel(structured_model)
+        self._client = genai.Client(api_key=api_key)
+        self._text_model_name = text_model
+        self._structured_model_name = structured_model
         self._temperature = temperature
         self._audit = audit_sink
         self._org = organization_id
         self._sema = asyncio.Semaphore(max_concurrent)
-        self._text_model_name = text_model
-        self._structured_model_name = structured_model
 
     @staticmethod
     def _type_check(payload: object) -> None:
@@ -117,8 +116,9 @@ class GeminiAdapter(LLMClient):
             + json.dumps(json_schema, indent=2)
         )
         text, attempts, dur_ms = await self._call_with_retry(
-            model=self._structured_model,
+            model=self._structured_model_name,
             prompt=prompt,
+            response_mime_type="application/json",
         )
         try:
             obj = json.loads(_strip_code_fence(text))
@@ -145,8 +145,9 @@ class GeminiAdapter(LLMClient):
         self._type_check(payload)
         prompt = _payload_to_text(payload)
         text, attempts, dur_ms = await self._call_with_retry(
-            model=self._text_model,
+            model=self._text_model_name,
             prompt=prompt,
+            response_mime_type="text/plain",
         )
         await self._emit_privacy_log(
             payload,
@@ -160,11 +161,16 @@ class GeminiAdapter(LLMClient):
     async def _call_with_retry(
         self,
         *,
-        model: Any,
+        model: str,
         prompt: str,
+        response_mime_type: str,
     ) -> tuple[str, int, int]:
         attempts = 0
         start = time.perf_counter()
+        config = genai_types.GenerateContentConfig(
+            temperature=self._temperature,
+            response_mime_type=response_mime_type,
+        )
         async with self._sema:
             async for attempt in AsyncRetrying(
                 stop=stop_after_attempt(3),
@@ -174,13 +180,10 @@ class GeminiAdapter(LLMClient):
             ):
                 with attempt:
                     attempts += 1
-                    response = await asyncio.to_thread(
-                        model.generate_content,
-                        prompt,
-                        generation_config={
-                            "temperature": self._temperature,
-                            "response_mime_type": "text/plain",
-                        },
+                    response = await self._client.aio.models.generate_content(
+                        model=model,
+                        contents=prompt,
+                        config=config,
                     )
                     text: str = getattr(response, "text", "") or ""
                     if not text:

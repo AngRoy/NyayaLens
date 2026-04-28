@@ -31,7 +31,7 @@ RUN python -m pip install --upgrade pip && \
         "pandas>=2.2,<3" \
         "scikit-learn>=1.5,<2" \
         "openpyxl>=3.1,<4" \
-        "google-generativeai>=0.8,<1" \
+        "google-genai>=0.8,<2" \
         "firebase-admin>=6.5,<7" \
         "google-cloud-storage>=2.18,<3" \
         "presidio-analyzer>=2.2,<3" \

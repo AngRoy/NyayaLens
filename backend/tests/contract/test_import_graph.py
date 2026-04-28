@@ -21,7 +21,7 @@ CORE_DIR = BACKEND_ROOT / "nyayalens" / "core"
 # Modules `core/` must never import.
 FORBIDDEN_PREFIXES: tuple[str, ...] = (
     "nyayalens.adapters",
-    "google.generativeai",
+    "google.genai",
     "firebase_admin",
     "google.cloud",
     "fastapi",
