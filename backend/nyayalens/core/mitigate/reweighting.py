@@ -87,12 +87,15 @@ def reweighting_weights(
 def _selection_rates(
     sensitive: pd.Series, outcome: pd.Series, *, positive_value: Any
 ) -> dict[str, float]:
+    """Per-group positive-outcome rate, computed in numpy."""
+    sens_arr = sensitive.to_numpy()
+    y_pos = (outcome == positive_value).to_numpy(dtype=float)
     rates: dict[str, float] = {}
-    for group, idx in sensitive.groupby(sensitive, observed=False).groups.items():
-        in_group = sensitive.index.isin(idx)
-        if not in_group.any():
+    for group in pd.unique(sens_arr):
+        mask = sens_arr == group
+        if not mask.any():
             continue
-        rates[str(group)] = float((outcome[in_group] == positive_value).mean())
+        rates[str(group)] = float(y_pos[mask].mean())
     return rates
 
 
@@ -103,15 +106,19 @@ def _weighted_selection_rates(
     *,
     positive_value: Any,
 ) -> dict[str, float]:
+    """Per-group weighted positive-outcome rate, computed in numpy."""
+    sens_arr = sensitive.to_numpy()
+    w_arr = weights.to_numpy(dtype=float)
+    y_pos = (outcome == positive_value).to_numpy(dtype=float)
     rates: dict[str, float] = {}
-    for group, idx in sensitive.groupby(sensitive, observed=False).groups.items():
-        in_group = sensitive.index.isin(idx)
-        if not in_group.any():
+    for group in pd.unique(sens_arr):
+        mask = sens_arr == group
+        if not mask.any():
             continue
-        w = weights[in_group].to_numpy(dtype=float)
-        y_pos = (outcome[in_group] == positive_value).to_numpy(dtype=float)
-        denom = w.sum()
-        rates[str(group)] = float((w * y_pos).sum() / denom) if denom > 0 else 0.0
+        denom = float(w_arr[mask].sum())
+        rates[str(group)] = (
+            float((w_arr[mask] * y_pos[mask]).sum() / denom) if denom > 0 else 0.0
+        )
     return rates
 
 
@@ -153,17 +160,19 @@ def apply_reweighting(
 
     group_weight_summary: dict[str, float] = {}
     cell_weight_summary: dict[str, float] = {}
-    y_pos = (outc == positive_value).astype(int)
-    for group, idx in sens.groupby(sens, observed=False).groups.items():
-        in_group = sens.index.isin(idx)
+    sens_arr = sens.to_numpy()
+    weights_arr = weights.to_numpy(dtype=float)
+    y_pos_arr = (outc == positive_value).to_numpy(dtype=int)
+    for group in pd.unique(sens_arr):
+        in_group = sens_arr == group
         if not in_group.any():
             continue
-        group_weight_summary[str(group)] = float(weights[in_group].mean())
+        group_weight_summary[str(group)] = float(weights_arr[in_group].mean())
         for o in (0, 1):
-            cell_mask = in_group & (y_pos == o).to_numpy()
+            cell_mask = in_group & (y_pos_arr == o)
             if not cell_mask.any():
                 continue
-            cell_weight_summary[f"{group}|{o}"] = float(weights[cell_mask].mean())
+            cell_weight_summary[f"{group}|{o}"] = float(weights_arr[cell_mask].mean())
 
     # Accuracy delta: heuristic estimate. Bounded to [-0.05, 0]. Real numbers
     # come from a downstream model run; the UI labels this as "estimated".
