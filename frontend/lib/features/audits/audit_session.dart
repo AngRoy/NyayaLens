@@ -29,6 +29,7 @@ class AuditSession extends ChangeNotifier {
   SchemaDetection? _schema;
   AuditDetail? _audit;
   bool _busy = false;
+  String? _busyLabel;
   String? _error;
 
   String? get fileName => _fileName;
@@ -36,10 +37,13 @@ class AuditSession extends ChangeNotifier {
   SchemaDetection? get schema => _schema;
   AuditDetail? get audit => _audit;
   bool get busy => _busy;
+  String? get busyLabel => _busyLabel;
   String? get error => _error;
   String? get currentAuditId => _audit?.id;
 
   bool get hasFile => _fileBytes != null && _fileName != null;
+  bool get hasProgress =>
+      hasFile || _datasetId != null || _schema != null || _audit != null;
   bool get canUpload => hasFile && !_busy;
   bool get canAnalyze => _schema?.isReady == true && !_busy;
 
@@ -70,7 +74,7 @@ class AuditSession extends ChangeNotifier {
     final bytes = _fileBytes;
     final name = _fileName;
     if (bytes == null || name == null) return;
-    await _run(() async {
+    await _run('Uploading dataset and detecting schema', () async {
       final upload = await api.uploadDataset(bytes: bytes, filename: name);
       _datasetId = upload['dataset_id'] as String?;
       if (_datasetId == null) {
@@ -85,7 +89,7 @@ class AuditSession extends ChangeNotifier {
     final datasetId = _datasetId;
     if (schema == null || datasetId == null || !schema.isReady) return null;
     String? auditId;
-    await _run(() async {
+    await _run('Creating audit and running analysis', () async {
       final created = await api.createAudit({
         'title': 'Audit - ${_fileName ?? 'uploaded dataset'}',
         'dataset_id': datasetId,
@@ -112,7 +116,7 @@ class AuditSession extends ChangeNotifier {
 
   Future<void> loadAudit(ApiClient api, String auditId) async {
     if (_audit?.id == auditId) return;
-    await _run(() async {
+    await _run('Loading audit workspace', () async {
       _audit = AuditDetail.fromJson(await api.getAudit(auditId));
     });
   }
@@ -120,7 +124,7 @@ class AuditSession extends ChangeNotifier {
   Future<void> applyReweighting(ApiClient api) async {
     final audit = _audit;
     if (audit == null || audit.sensitiveAttributes.isEmpty) return;
-    await _run(() async {
+    await _run('Applying reweighting mitigation', () async {
       final target = audit.sensitiveAttributes.first;
       _audit = AuditDetail.fromJson(
         await api.remediateAudit(
@@ -136,7 +140,7 @@ class AuditSession extends ChangeNotifier {
   Future<void> signOff(ApiClient api, String notes) async {
     final audit = _audit;
     if (audit == null) return;
-    await _run(() async {
+    await _run('Recording reviewer sign-off', () async {
       _audit = AuditDetail.fromJson(await api.signOffAudit(audit.id, notes: notes));
     });
   }
@@ -144,10 +148,22 @@ class AuditSession extends ChangeNotifier {
   Future<void> generateReport(ApiClient api) async {
     final audit = _audit;
     if (audit == null) return;
-    await _run(() async {
+    await _run('Generating audit report', () async {
       await api.generateReport(audit.id);
       _audit = AuditDetail.fromJson(await api.getAudit(audit.id));
     });
+  }
+
+  void reset() {
+    _fileBytes = null;
+    _fileName = null;
+    _datasetId = null;
+    _schema = null;
+    _audit = null;
+    _busy = false;
+    _busyLabel = null;
+    _error = null;
+    notifyListeners();
   }
 
   void clearError() {
@@ -155,8 +171,9 @@ class AuditSession extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _run(Future<void> Function() task) async {
+  Future<void> _run(String busyLabel, Future<void> Function() task) async {
     _busy = true;
+    _busyLabel = busyLabel;
     _error = null;
     notifyListeners();
     try {
@@ -165,6 +182,7 @@ class AuditSession extends ChangeNotifier {
       _error = friendlyApiError(error);
     } finally {
       _busy = false;
+      _busyLabel = null;
       notifyListeners();
     }
   }

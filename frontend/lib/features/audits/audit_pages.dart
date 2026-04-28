@@ -23,13 +23,20 @@ class NewAuditPage extends ConsumerWidget {
       subtitle:
           'Upload a dataset, confirm the detected schema, and launch the audit workspace.',
       selectedRoute: '/audits/new',
+      trailing: session.hasProgress
+          ? OutlinedButton.icon(
+              onPressed: session.busy ? null : session.reset,
+              icon: const Icon(Icons.restart_alt),
+              label: const Text('Start over'),
+            )
+          : null,
       children: [
         if (session.error != null)
           _ErrorBanner(
             message: session.error!,
             onDismiss: session.clearError,
           ),
-        if (session.busy) const _BusyPanel(),
+        if (session.busy) _BusyPanel(label: session.busyLabel),
         _UploadPanel(session: session),
         if (session.schema != null) _SchemaReviewPanel(session: session),
       ],
@@ -90,7 +97,7 @@ class _AuditWorkspacePageState extends ConsumerState<AuditWorkspacePage> {
             message: session.error!,
             onDismiss: session.clearError,
           ),
-        if (session.busy && audit == null) const _BusyPanel(),
+        if (session.busy && audit == null) _BusyPanel(label: session.busyLabel),
         if (audit == null && !session.busy)
           EmptyStatePanel(
             icon: Icons.manage_search_outlined,
@@ -719,7 +726,10 @@ class _RemediationView extends ConsumerWidget {
             trailing: FilledButton.icon(
               onPressed: session.busy
                   ? null
-                  : () => session.applyReweighting(ref.read(apiClientProvider)),
+                  : () async {
+                      await session.applyReweighting(ref.read(apiClientProvider));
+                      ref.invalidate(auditSummariesProvider);
+                    },
               icon: const Icon(Icons.tune),
               label: const Text('Apply reweighting'),
             ),
@@ -860,6 +870,7 @@ class _SignOffFormState extends ConsumerState<_SignOffForm> {
                         ref.read(apiClientProvider),
                         _controller.text.trim(),
                       );
+                      ref.invalidate(auditSummariesProvider);
                       if (context.mounted) {
                         context.go('/audits/${widget.audit.id}/report');
                       }
@@ -953,7 +964,10 @@ class _ReportView extends ConsumerWidget {
                   FilledButton.icon(
                     onPressed: session.busy
                         ? null
-                        : () => session.generateReport(ref.read(apiClientProvider)),
+                        : () async {
+                            await session.generateReport(ref.read(apiClientProvider));
+                            ref.invalidate(auditSummariesProvider);
+                          },
                     icon: const Icon(Icons.picture_as_pdf_outlined),
                     label: const Text('Generate report'),
                   )
@@ -1008,14 +1022,33 @@ class _ResponsiveGrid extends StatelessWidget {
 }
 
 class _BusyPanel extends StatelessWidget {
-  const _BusyPanel();
+  const _BusyPanel({this.label});
+
+  final String? label;
 
   @override
   Widget build(BuildContext context) {
-    return const SurfacePanel(
+    return SurfacePanel(
       child: SizedBox(
         height: 96,
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(),
+              if (label != null) ...[
+                const SizedBox(width: 16),
+                Flexible(
+                  child: Text(
+                    label!,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
