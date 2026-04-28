@@ -168,23 +168,28 @@ class _Cell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = cell;
-    return InkWell(
-      onTap: c == null || onTap == null ? null : () => onTap!(c),
-      child: Container(
-        width: width,
-        height: height,
-        margin: const EdgeInsets.all(3),
-        decoration: BoxDecoration(
-          color: severityColor.withValues(alpha: 0.85),
+    return SizedBox(
+      width: width,
+      height: height,
+      child: Padding(
+        padding: const EdgeInsets.all(3),
+        child: InkWell(
+          onTap: c == null || onTap == null ? null : () => onTap!(c),
           borderRadius: BorderRadius.circular(6),
-        ),
-        child: Center(
-          child: Text(
-            valueText,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-              fontSize: 16,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: severityColor.withValues(alpha: 0.85),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Center(
+              child: Text(
+                valueText,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                ),
+              ),
             ),
           ),
         ),

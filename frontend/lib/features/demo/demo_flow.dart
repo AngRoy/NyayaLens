@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:nyayalens_client/shared/api/api_client.dart';
+import 'package:nyayalens_client/shared/platform/url_opener.dart';
 import 'package:nyayalens_client/shared/widgets/bias_heatmap.dart';
 
 class DemoFlowScreen extends ConsumerStatefulWidget {
@@ -747,14 +748,22 @@ class _Step6Report extends StatelessWidget {
             label: const Text('Generate audit report (PDF)'),
           )
         else
-          Row(
+          Wrap(
+            spacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              const Icon(Icons.picture_as_pdf, color: Color(0xFFC62828)),
-              const SizedBox(width: 8),
-              Text(
-                'Report ready · ${reportUrl ?? ''}',
-                style: const TextStyle(decoration: TextDecoration.underline),
+              FilledButton.icon(
+                onPressed: reportUrl == null
+                    ? null
+                    : () => openExternalUrl(reportUrl!),
+                icon: const Icon(Icons.open_in_new),
+                label: const Text('Open audit report PDF'),
               ),
+              if (reportUrl != null)
+                Text(
+                  reportUrl!,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
             ],
           ),
       ],
