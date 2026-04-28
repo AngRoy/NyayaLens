@@ -25,9 +25,9 @@ if TYPE_CHECKING:
 DEFAULT_OUT = Path(__file__).resolve().parents[2] / "shared" / "schemas"
 
 
-def _public_models() -> list[type["BaseModel"]]:
+def _public_models() -> list[type[BaseModel]]:
     """Discover the BaseModel subclasses re-exported by `nyayalens.models.api`."""
-    from pydantic import BaseModel
+    from pydantic import BaseModel  # noqa: F811 - runtime use within function body
 
     out: list[type[BaseModel]] = []
     for name in api_models.__all__:
