@@ -123,6 +123,21 @@ class ApiClient {
         data: {'notes': notes, 'confirmed': true},
       );
 
+  Future<Map<String, dynamic>> tradeoffAudit(
+    String auditId, {
+    required String metricChosen,
+    required String justification,
+    required List<String> conflictsAcknowledged,
+  }) =>
+      _post(
+        '/audits/$auditId/tradeoff',
+        data: {
+          'metric_chosen': metricChosen,
+          'justification': justification,
+          'conflicts_acknowledged': conflictsAcknowledged,
+        },
+      );
+
   // ---- Reports ------------------------------------------------------
 
   Future<Map<String, dynamic>> generateReport(String auditId) =>

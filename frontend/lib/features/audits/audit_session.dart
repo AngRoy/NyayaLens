@@ -150,6 +150,26 @@ class AuditSession extends ChangeNotifier {
     });
   }
 
+  Future<void> applyTradeoff(
+    ApiClient api, {
+    required String metricChosen,
+    required String justification,
+    required List<String> conflictsAcknowledged,
+  }) async {
+    final audit = _audit;
+    if (audit == null) return;
+    await _run('Recording metric tradeoff', () async {
+      _audit = AuditDetail.fromJson(
+        await api.tradeoffAudit(
+          audit.id,
+          metricChosen: metricChosen,
+          justification: justification,
+          conflictsAcknowledged: conflictsAcknowledged,
+        ),
+      );
+    });
+  }
+
   Future<void> generateReport(ApiClient api) async {
     final audit = _audit;
     if (audit == null) return;

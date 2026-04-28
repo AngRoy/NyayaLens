@@ -124,6 +124,7 @@ class AuditDetail {
     required this.proxies,
     required this.remediation,
     required this.signOff,
+    required this.tradeoff,
     required this.hasReport,
   });
 
@@ -144,6 +145,9 @@ class AuditDetail {
           : RemediationResult.fromJson(_asMap(json['remediation'])),
       signOff:
           json['sign_off'] == null ? null : SignOff.fromJson(_asMap(json['sign_off'])),
+      tradeoff: json['tradeoff'] == null
+          ? null
+          : Tradeoff.fromJson(_asMap(json['tradeoff'])),
       hasReport: json['has_report'] == true,
     );
   }
@@ -158,6 +162,7 @@ class AuditDetail {
   final List<ProxyFlag> proxies;
   final RemediationResult? remediation;
   final SignOff? signOff;
+  final Tradeoff? tradeoff;
   final bool hasReport;
 
   String get id => summary.id;
@@ -325,6 +330,35 @@ class RemediationResult {
   final double? spdBefore;
   final double? spdAfter;
   final double accuracyEstimateDelta;
+}
+
+class Tradeoff {
+  const Tradeoff({
+    required this.metricChosen,
+    required this.justification,
+    required this.conflictsAcknowledged,
+    required this.selectedByUid,
+    required this.selectedByName,
+    required this.selectedAt,
+  });
+
+  factory Tradeoff.fromJson(Map<String, dynamic> json) {
+    return Tradeoff(
+      metricChosen: _asString(json['metric_chosen'], 'metric'),
+      justification: _asString(json['justification'], ''),
+      conflictsAcknowledged: _asStringList(json['conflicts_acknowledged']),
+      selectedByUid: _asString(json['selected_by_uid'], ''),
+      selectedByName: _asString(json['selected_by_name'], 'Reviewer'),
+      selectedAt: _asString(json['selected_at'], ''),
+    );
+  }
+
+  final String metricChosen;
+  final String justification;
+  final List<String> conflictsAcknowledged;
+  final String selectedByUid;
+  final String selectedByName;
+  final String selectedAt;
 }
 
 class DataQuality {
