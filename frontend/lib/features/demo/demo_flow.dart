@@ -48,7 +48,7 @@ class _DemoFlowScreenState extends ConsumerState<DemoFlowScreen> {
   }
 
   Future<void> _pickFile() async {
-    final picked = await FilePicker.platform.pickFiles(
+    final picked = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['csv', 'xlsx'],
       withData: true,
@@ -570,9 +570,11 @@ class _BeforeAfter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dirBefore = (remediation['dir_before'] as num?)?.toDouble() ?? 0;
-    final dirAfter = (remediation['dir_after'] as num?)?.toDouble() ?? 0;
-    final accDelta =
+    // DIR is `null` on the wire when the privileged-group rate is zero
+    // (ratio undefined). Render as "n/a" rather than "0.00".
+    final double? dirBefore = (remediation['dir_before'] as num?)?.toDouble();
+    final double? dirAfter = (remediation['dir_after'] as num?)?.toDouble();
+    final double accDelta =
         (remediation['accuracy_estimate_delta'] as num?)?.toDouble() ?? 0;
     return Row(
       children: [
@@ -617,12 +619,16 @@ class _MetricBox extends StatelessWidget {
   });
 
   final String label;
-  final double value;
+  final double? value;
   final Color colour;
   final String Function(double)? formatter;
 
   @override
   Widget build(BuildContext context) {
+    final v = value;
+    final display = v == null
+        ? 'n/a'
+        : (formatter ?? (x) => x.toStringAsFixed(2))(v);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -635,7 +641,7 @@ class _MetricBox extends StatelessWidget {
           Text(label, style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 6),
           Text(
-            (formatter ?? (v) => v.toStringAsFixed(2))(value),
+            display,
             style: Theme.of(context)
                 .textTheme
                 .headlineSmall
