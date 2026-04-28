@@ -160,7 +160,11 @@ def test_full_audit_lifecycle(client: TestClient, demo_csv: bytes) -> None:
     assert r.status_code == 200, r.text
     rem = r.json()["remediation"]
     assert rem is not None
-    assert rem["dir_after"] > rem["dir_before"]
+    # Demo seed has a documented Female/Male disparity; reweighting must
+    # measure that disparity (DIR < 0.80) and provably equalise rates
+    # (Kamiran/Calders aligns group rates to P(y=1), so post-DIR == 1.0).
+    assert rem["dir_before"] < 0.80
+    assert rem["dir_after"] == pytest.approx(1.0, abs=1e-9)
 
     # 6. Sign off
     r = client.post(
