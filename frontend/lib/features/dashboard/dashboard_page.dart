@@ -37,7 +37,7 @@ class DashboardPage extends ConsumerWidget {
           loading: () => const SizedBox.shrink(),
           error: (error, stackTrace) => const SizedBox.shrink(),
         ),
-        _ProcessPanel(),
+        const _ProcessPanel(),
       ],
     );
   }
@@ -226,20 +226,22 @@ class _AuditListRow extends StatelessWidget {
 }
 
 class _ProcessPanel extends StatelessWidget {
+  const _ProcessPanel();
+
   @override
   Widget build(BuildContext context) {
-    return SurfacePanel(
+    return const SurfacePanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SectionHeader(
+          SectionHeader(
             title: 'Review pipeline',
             subtitle:
                 'The workflow keeps evidence, mitigation, reviewer notes, and reports together.',
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           _Pipeline(
-            steps: const [
+            steps: [
               _PipelineStep('Upload', Icons.upload_file),
               _PipelineStep('Detect schema', Icons.schema_outlined),
               _PipelineStep('Analyze', Icons.analytics_outlined),

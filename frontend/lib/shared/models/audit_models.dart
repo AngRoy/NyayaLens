@@ -70,7 +70,7 @@ class OutcomeColumn {
   factory OutcomeColumn.fromJson(Map<String, dynamic> json) {
     return OutcomeColumn(
       column: _asString(json['column'], 'unknown'),
-      positiveValue: json['positive_value'] ?? 1,
+      positiveValue: _asObject(json['positive_value'], 1),
       confidence: _asDouble(json['confidence']) ?? 0,
     );
   }
@@ -395,4 +395,8 @@ String? _nullableString(Object? value) {
 double? _asDouble(Object? value) {
   if (value is num) return value.toDouble();
   return double.tryParse(value?.toString() ?? '');
+}
+
+Object _asObject(Object? value, Object fallback) {
+  return value ?? fallback;
 }

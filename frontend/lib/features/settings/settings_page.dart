@@ -9,11 +9,11 @@ class SettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return NyayaAppShell(
+    return const NyayaAppShell(
       title: 'Workspace settings',
       subtitle: 'Local configuration used by the web client during development.',
       selectedRoute: '/settings',
-      children: const [
+      children: [
         _RuntimePanel(),
         _GovernancePanel(),
       ],
@@ -35,7 +35,7 @@ class _RuntimePanel extends StatelessWidget {
             subtitle: 'Build-time API and demo identity values.',
           ),
           const SizedBox(height: 18),
-          _SettingRow(
+          const _SettingRow(
             icon: Icons.cloud_queue,
             label: 'API base',
             value: kApiBaseUrl,
@@ -63,20 +63,20 @@ class _GovernancePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SurfacePanel(
+    return const SurfacePanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SectionHeader(
+          SectionHeader(
             title: 'Governance defaults',
             subtitle:
                 'NyayaLens keeps raw data away from the LLM path and records reviewer actions.',
           ),
-          const SizedBox(height: 18),
+          SizedBox(height: 18),
           Wrap(
             spacing: 10,
             runSpacing: 10,
-            children: const [
+            children: [
               StatusBadge(
                 label: 'Human sign-off required',
                 tone: BadgeTone.info,

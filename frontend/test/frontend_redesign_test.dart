@@ -107,7 +107,7 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('Could not load audits'), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);

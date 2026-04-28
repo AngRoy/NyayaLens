@@ -36,7 +36,7 @@ Iterable<String> _propertyNames(Map<String, dynamic> schema) {
 
 void main() {
   group('API contract', () {
-    test('AuditDetailResponse exposes the keys demo_flow.dart reads', () {
+    test('AuditDetailResponse exposes the keys the frontend reads', () {
       final schema = _loadSchema('AuditDetailResponse');
       final keys = _propertyNames(schema).toSet();
       expect(keys, containsAll(<String>{'audit_id', 'title', 'status', 'mode'}));
