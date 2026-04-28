@@ -1,4 +1,17 @@
-"""HTTP DTOs for the public-ish REST API consumed by the Flutter client."""
+"""HTTP DTOs for the public-ish REST API consumed by the Flutter client.
+
+The package mixes two surfaces:
+
+- ``wire.*`` — the DTOs the FastAPI route layer actually returns today
+  (matched 1:1 to what the Flutter client parses).
+- The other modules (``audit``, ``bias``, ``probe``, ``recourse``,
+  ``remediate``, ``report``, ``dataset``, ``govern``, ``evidence``) — the
+  design-doc-aligned future shapes the API will graduate to as endpoints
+  are reshaped.
+
+Both are exported so the ``contract-test`` workflow exposes everything to
+the Flutter golden-fixture parser.
+"""
 
 from nyayalens.models.api.audit import (
     AuditCreateRequest,
@@ -44,30 +57,61 @@ from nyayalens.models.api.remediate import (
     RemediationResult,
 )
 from nyayalens.models.api.report import ReportStatusResponse
+from nyayalens.models.api.wire import (
+    AuditDetailWireResponse,
+    AuditSummaryWireResponse,
+    CreateAuditWireRequest,
+    DatasetUploadWireResponse,
+    DetectSchemaWireResponse,
+    JdScanWireRequest,
+    JdScanWireResponse,
+    PerturbationWireRequest,
+    PerturbationWireResponse,
+    RecourseRequestWireBody,
+    RecourseRequestWireResponse,
+    RecourseSummaryWireRequest,
+    RecourseSummaryWireResponse,
+    RemediateWireRequest,
+    SignOffWireRequest,
+)
 
 __all__ = [
     "AuditCreateRequest",
     "AuditDetailResponse",
+    "AuditDetailWireResponse",
     "AuditSummary",
+    "AuditSummaryWireResponse",
     "AuditTrailEntryView",
     "BiasGridCell",
     "BiasGridResponse",
     "ConflictView",
+    "CreateAuditWireRequest",
     "DataProvenance",
     "DatasetPreview",
     "DatasetUploadResponse",
+    "DatasetUploadWireResponse",
+    "DetectSchemaWireResponse",
     "ExplanationView",
     "JdScanRequest",
     "JdScanResponse",
+    "JdScanWireRequest",
+    "JdScanWireResponse",
     "MetricResultView",
     "Mode",
     "PerturbationProbeRequest",
     "PerturbationProbeResponse",
+    "PerturbationWireRequest",
+    "PerturbationWireResponse",
     "ProbeVariantResult",
     "ProxyFlagView",
     "RecourseRequestCreate",
     "RecourseRequestView",
+    "RecourseRequestWireBody",
+    "RecourseRequestWireResponse",
     "RecourseSummaryView",
+    "RecourseSummaryWireRequest",
+    "RecourseSummaryWireResponse",
+    "RemediateWireRequest",
     "RemediationApplyRequest",
     "RemediationApproveRequest",
     "RemediationResult",
@@ -78,4 +122,5 @@ __all__ = [
     "SensitiveAttrView",
     "SignOffRequest",
     "SignOffView",
+    "SignOffWireRequest",
 ]

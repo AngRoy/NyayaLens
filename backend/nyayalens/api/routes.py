@@ -28,7 +28,6 @@ from fastapi import (
     UploadFile,
     status,
 )
-from pydantic import BaseModel, ConfigDict, Field
 
 from nyayalens.adapters.reportlab_pdf import render_audit_report
 from nyayalens.api.deps import (
@@ -64,6 +63,46 @@ from nyayalens.core.report.composer import build_audit_report
 from nyayalens.core.schema.detector import SchemaDetector
 from nyayalens.core.schema.parser import parse_dataset
 from nyayalens.core.schema.pii import PrivacyFilter
+from nyayalens.models.api.wire import (
+    AuditDetailWireResponse,
+    AuditSummaryWireResponse,
+    CreateAuditWireRequest,
+    DatasetUploadWireResponse,
+    DetectSchemaWireResponse,
+    JdScanWireRequest,
+    JdScanWireResponse,
+    PerturbationWireRequest,
+    PerturbationWireResponse,
+    RecourseRequestWireBody,
+    RecourseRequestWireResponse,
+    RecourseSummaryWireRequest,
+    RecourseSummaryWireResponse,
+    RemediateWireRequest,
+    SignOffWireRequest,
+)
+
+# ---------------------------------------------------------------------------
+# Local aliases — the wire DTOs live in `nyayalens.models.api.wire` so the
+# `contract-test` workflow can export their JSON Schemas to the Flutter
+# client. The route handlers below keep the original short names so the
+# integration test and route signatures stay readable.
+# ---------------------------------------------------------------------------
+DatasetUploadResponse = DatasetUploadWireResponse
+DetectSchemaResponse = DetectSchemaWireResponse
+CreateAuditRequest = CreateAuditWireRequest
+AuditSummaryResponse = AuditSummaryWireResponse
+AuditDetailResponse = AuditDetailWireResponse
+RemediateRequest = RemediateWireRequest
+SignOffRequest = SignOffWireRequest
+JdScanRequest = JdScanWireRequest
+JdScanResponse = JdScanWireResponse
+PerturbationRequest = PerturbationWireRequest
+PerturbationResponse = PerturbationWireResponse
+RecourseSummaryRequest = RecourseSummaryWireRequest
+RecourseSummaryResponse = RecourseSummaryWireResponse
+RecourseRequestBody = RecourseRequestWireBody
+RecourseRequestResponse = RecourseRequestWireResponse
+
 
 router = APIRouter()
 
@@ -78,16 +117,6 @@ def _require(user: CurrentUser, perm: Permission) -> None:
 # ============================================================================
 # 1. Datasets
 # ============================================================================
-
-
-class DatasetUploadResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    dataset_id: str
-    row_count: int
-    column_count: int
-    columns: list[dict[str, Any]]
-    sample_rows: list[dict[str, Any]]
 
 
 @router.post(
@@ -131,18 +160,6 @@ async def upload_dataset(
         ],
         sample_rows=parsed.sample_rows,
     )
-
-
-class DetectSchemaResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    dataset_id: str
-    needs_review: bool
-    sensitive_attributes: list[dict[str, Any]]
-    outcome_column: dict[str, Any] | None
-    feature_columns: list[str]
-    identifier_columns: list[str]
-    score_column: str | None
 
 
 @router.post(
@@ -215,35 +232,6 @@ async def detect_schema(
 # ============================================================================
 
 
-class CreateAuditRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    title: str = Field(min_length=3, max_length=200)
-    dataset_id: str
-    domain: str = "hiring"
-    mode: str = "audit"
-    provenance_kind: str = "synthetic"
-    provenance_label: str = "Synthetic seeded demo"
-    sensitive_attributes: list[str]
-    outcome_column: str
-    positive_value: Any = 1
-    score_column: str | None = None
-    feature_columns: list[str] = Field(default_factory=list)
-    identifier_columns: list[str] = Field(default_factory=list)
-
-
-class AuditSummaryResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    audit_id: str
-    title: str
-    status: str
-    mode: str
-    domain: str
-    provenance_kind: str
-    provenance_label: str
-
-
 def _audit_summary(a: StoredAudit) -> AuditSummaryResponse:
     return AuditSummaryResponse(
         audit_id=a.audit_id,
@@ -305,22 +293,6 @@ async def list_audits(
 ) -> list[AuditSummaryResponse]:
     _require(user, "audit.view")
     return [_audit_summary(a) for a in state.list_audits(user.organization_id)]
-
-
-class AuditDetailResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    summary: AuditSummaryResponse
-    sensitive_attributes: list[str] = Field(default_factory=list)
-    outcome_column: str | None = None
-    metrics: list[dict[str, Any]] = Field(default_factory=list)
-    heatmap_cells: list[dict[str, Any]] = Field(default_factory=list)
-    explanations: list[dict[str, Any]] = Field(default_factory=list)
-    conflicts: list[dict[str, Any]] = Field(default_factory=list)
-    proxies: list[dict[str, Any]] = Field(default_factory=list)
-    remediation: dict[str, Any] | None = None
-    sign_off: dict[str, Any] | None = None
-    has_report: bool = False
 
 
 def _metric_to_dict(m: Any) -> dict[str, Any]:
@@ -559,13 +531,6 @@ async def analyze_audit(
     return _audit_detail(refreshed)
 
 
-class RemediateRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    target_attribute: str
-    justification: str = Field(min_length=10)
-
-
 @router.post(
     "/audits/{audit_id}/remediate",
     response_model=AuditDetailResponse,
@@ -619,13 +584,6 @@ async def remediate_audit(
     return _audit_detail(refreshed)
 
 
-class SignOffRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    notes: str = Field(min_length=10)
-    confirmed: bool
-
-
 @router.post(
     "/audits/{audit_id}/sign-off",
     response_model=AuditDetailResponse,
@@ -674,24 +632,6 @@ async def sign_off_audit(
 # ============================================================================
 
 
-class JdScanRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    job_title: str = Field(min_length=2)
-    job_description: str = Field(min_length=20)
-
-
-class JdScanResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    job_title: str
-    inclusivity_score: float
-    flagged_phrases: list[dict[str, Any]]
-    rewrite_suggestions: list[str]
-    backend: str
-    created_at: datetime
-
-
 @router.post(
     "/probes/job-description",
     response_model=JdScanResponse,
@@ -714,29 +654,6 @@ async def jd_scan(
         backend=result.backend,
         created_at=result.generated_at,
     )
-
-
-class PerturbationRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    role: str
-    criteria: str
-    candidate_profile_template: str
-    variations: list[dict[str, Any]] = Field(min_length=2, max_length=10)
-    audit_id: str | None = None
-
-
-class PerturbationResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    probe_id: str
-    role: str
-    variants: list[dict[str, Any]]
-    max_score_difference: float
-    score_variance: float
-    flagged_pattern_summary: list[str]
-    interpretation: str
-    backend: str
 
 
 @router.post(
@@ -830,30 +747,6 @@ async def perturbation_probe(
 # ============================================================================
 
 
-class RecourseSummaryRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    decision_cycle_label: str = Field(min_length=2)
-    organization_name: str = Field(min_length=2)
-    contact_email: str
-    sla_business_days: int = 15
-    extra_regulatory_references: list[str] = Field(default_factory=list)
-
-
-class RecourseSummaryResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    audit_id: str
-    organization_name: str
-    decision_cycle_label: str
-    factor_categories: list[str]
-    aggregate_statistics: dict[str, str]
-    automated_tools_used: list[str]
-    how_to_request_review: str
-    contact_email: str
-    regulatory_references: list[str]
-
-
 @router.post(
     "/audits/{audit_id}/recourse-summary",
     response_model=RecourseSummaryResponse,
@@ -894,23 +787,6 @@ async def recourse_summary(
         contact_email=summary.contact_email,
         regulatory_references=summary.regulatory_references,
     )
-
-
-class RecourseRequestBody(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    audit_id: str
-    applicant_identifier: str
-    contact_email: str
-    request_type: str = "human_review"
-    body: str = Field(min_length=10, max_length=2000)
-
-
-class RecourseRequestResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    request_id: str
-    status: str = "pending"
 
 
 @router.post(
