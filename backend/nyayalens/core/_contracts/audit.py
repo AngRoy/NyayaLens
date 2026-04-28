@@ -30,6 +30,7 @@ AuditAction = Literal[
     "signoff_completed",
     "report_generated",
     "recourse_filed",
+    "recourse_assigned",
     "recourse_resolved",
     "privacy_log",
 ]

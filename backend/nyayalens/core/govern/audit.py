@@ -69,6 +69,9 @@ def summarise_event(event: AuditEvent) -> str:
         return f"{when} — {event.user_name} signed off ({event.user_role})"
     if event.action == "recourse_filed":
         return f"{when} — recourse request filed"
+    if event.action == "recourse_assigned":
+        assignee = event.details.get("assigned_to_name", "(unknown)")
+        return f"{when} — {event.user_name} assigned recourse to {assignee}"
     if event.action == "recourse_resolved":
         state = event.details.get("status", "resolved")
         return f"{when} — {event.user_name} marked recourse {state}"

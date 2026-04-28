@@ -40,7 +40,7 @@ from nyayalens.api.deps import (
     get_privacy_filter,
     get_storage,
 )
-from nyayalens.api.state import AppState, StoredAudit
+from nyayalens.api.state import AppState, StoredAudit, StoredRecourseRequest
 from nyayalens.config import Settings, get_settings
 from nyayalens.core._contracts.llm import LLMClient, LLMPayload, StrictPayload
 from nyayalens.core._contracts.storage import StorageClient
@@ -73,8 +73,12 @@ from nyayalens.models.api.wire import (
     JdScanWireResponse,
     PerturbationWireRequest,
     PerturbationWireResponse,
+    RecourseAssignWireRequest,
+    RecourseRequestListWireResponse,
+    RecourseRequestRecordWire,
     RecourseRequestWireBody,
     RecourseRequestWireResponse,
+    RecourseResolveWireRequest,
     RecourseSummaryWireRequest,
     RecourseSummaryWireResponse,
     RemediateWireRequest,
@@ -102,9 +106,31 @@ RecourseSummaryRequest = RecourseSummaryWireRequest
 RecourseSummaryResponse = RecourseSummaryWireResponse
 RecourseRequestBody = RecourseRequestWireBody
 RecourseRequestResponse = RecourseRequestWireResponse
+RecourseRequestRecord = RecourseRequestRecordWire
+RecourseAssignRequest = RecourseAssignWireRequest
+RecourseResolveRequest = RecourseResolveWireRequest
+RecourseRequestListResponse = RecourseRequestListWireResponse
 
 
 router = APIRouter()
+
+
+def _recourse_record(req: StoredRecourseRequest) -> RecourseRequestRecord:
+    return RecourseRequestRecord(
+        request_id=req.request_id,
+        audit_id=req.audit_id,
+        organization_id=req.organization_id,
+        applicant_identifier=req.applicant_identifier,
+        contact_email=req.contact_email,
+        request_type=req.request_type,
+        body=req.body,
+        status=req.status,
+        assigned_to_uid=req.assigned_to_uid,
+        assigned_to_name=req.assigned_to_name,
+        reviewer_notes=req.reviewer_notes,
+        created_at=req.created_at,
+        resolved_at=req.resolved_at,
+    )
 
 
 def _require(user: CurrentUser, perm: Permission) -> None:
@@ -796,9 +822,31 @@ async def recourse_summary(
 )
 async def file_recourse(
     body: RecourseRequestBody,
+    state: Annotated[AppState, Depends(get_app_state)],
+    user: Annotated[CurrentUser, Depends(get_current_user)],
     audit_writer: Annotated[AuditWriter, Depends(get_audit_writer)],
 ) -> RecourseRequestResponse:
+    _require(user, "recourse.file")
+    audit = state.get_audit(body.audit_id)
+    if audit is None or audit.organization_id != user.organization_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="audit not found")
+    if body.request_type not in ("human_review", "explanation", "appeal"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"unknown request_type: {body.request_type!r}",
+        )
     request_id = uuid4().hex
+    state.put_recourse_request(
+        StoredRecourseRequest(
+            request_id=request_id,
+            audit_id=body.audit_id,
+            organization_id=audit.organization_id,
+            applicant_identifier=body.applicant_identifier,
+            contact_email=body.contact_email,
+            request_type=body.request_type,  # type: ignore[arg-type]
+            body=body.body,
+        )
+    )
     await audit_writer.write(
         "recourse_filed",
         audit_id=body.audit_id,
@@ -811,6 +859,110 @@ async def file_recourse(
         },
     )
     return RecourseRequestResponse(request_id=request_id)
+
+
+@router.get(
+    "/recourse-requests",
+    response_model=RecourseRequestListResponse,
+    tags=["recourse"],
+)
+async def list_recourse_requests(
+    state: Annotated[AppState, Depends(get_app_state)],
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> RecourseRequestListResponse:
+    _require(user, "recourse.review")
+    items = state.list_recourse_requests(user.organization_id)
+    return RecourseRequestListResponse(requests=[_recourse_record(r) for r in items])
+
+
+@router.post(
+    "/recourse-requests/{request_id}/assign",
+    response_model=RecourseRequestRecord,
+    tags=["recourse"],
+)
+async def assign_recourse_request(
+    request_id: str,
+    body: RecourseAssignRequest,
+    state: Annotated[AppState, Depends(get_app_state)],
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    audit_writer: Annotated[AuditWriter, Depends(get_audit_writer)],
+) -> RecourseRequestRecord:
+    _require(user, "recourse.review")
+    req = state.get_recourse_request(request_id)
+    if req is None or req.organization_id != user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="recourse request not found"
+        )
+    if req.status not in ("pending", "in_review"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"cannot assign a {req.status} request",
+        )
+    updated = state.update_recourse_request(
+        request_id,
+        status="in_review",
+        assigned_to_uid=body.assignee_uid,
+        assigned_to_name=body.assignee_name,
+    )
+    if updated is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="recourse request vanished"
+        )
+    await audit_writer.write(
+        "recourse_assigned",
+        audit_id=updated.audit_id,
+        details={
+            "request_id": request_id,
+            "assigned_to_uid": body.assignee_uid,
+            "assigned_to_name": body.assignee_name,
+        },
+    )
+    return _recourse_record(updated)
+
+
+@router.post(
+    "/recourse-requests/{request_id}/resolve",
+    response_model=RecourseRequestRecord,
+    tags=["recourse"],
+)
+async def resolve_recourse_request(
+    request_id: str,
+    body: RecourseResolveRequest,
+    state: Annotated[AppState, Depends(get_app_state)],
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    audit_writer: Annotated[AuditWriter, Depends(get_audit_writer)],
+) -> RecourseRequestRecord:
+    _require(user, "recourse.review")
+    req = state.get_recourse_request(request_id)
+    if req is None or req.organization_id != user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="recourse request not found"
+        )
+    if req.status not in ("pending", "in_review"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"recourse already resolved (status={req.status})",
+        )
+    updated = state.update_recourse_request(
+        request_id,
+        status=body.resolution,
+        reviewer_notes=body.reviewer_notes,
+        resolved_at=datetime.now(UTC),
+    )
+    if updated is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="recourse request vanished"
+        )
+    await audit_writer.write(
+        "recourse_resolved",
+        audit_id=updated.audit_id,
+        details={
+            "request_id": request_id,
+            "status": body.resolution,
+            "reviewer_notes": body.reviewer_notes,
+        },
+    )
+    return _recourse_record(updated)
 
 
 # ============================================================================
