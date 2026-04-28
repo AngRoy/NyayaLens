@@ -543,7 +543,11 @@ async def analyze_audit(
     )
 
     refreshed = state.get_audit(audit_id)
-    assert refreshed is not None
+    if refreshed is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="audit vanished mid-update",
+        )
     return _audit_detail(refreshed)
 
 
@@ -599,7 +603,11 @@ async def remediate_audit(
         },
     )
     refreshed = state.get_audit(audit_id)
-    assert refreshed is not None
+    if refreshed is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="audit vanished mid-update",
+        )
     return _audit_detail(refreshed)
 
 
@@ -645,7 +653,11 @@ async def sign_off_audit(
         details=sign_off,
     )
     refreshed = state.get_audit(audit_id)
-    assert refreshed is not None
+    if refreshed is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="audit vanished mid-update",
+        )
     return _audit_detail(refreshed)
 
 
