@@ -11,7 +11,7 @@ Imported by:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from threading import RLock
 from typing import Any
 from uuid import uuid4
@@ -91,12 +91,18 @@ class AppState:
         with self._lock:
             return self._audits.get(audit_id)
 
-    def update_audit(self, audit_id: str, **fields: Any) -> StoredAudit | None:
+    def update_audit(self, audit_id: str, **changes: Any) -> StoredAudit | None:
+        allowed = {f.name for f in fields(StoredAudit)}
+        unknown = set(changes) - allowed
+        if unknown:
+            raise ValueError(
+                f"unknown StoredAudit field(s): {sorted(unknown)}; allowed: {sorted(allowed)}"
+            )
         with self._lock:
             audit = self._audits.get(audit_id)
             if audit is None:
                 return None
-            for k, v in fields.items():
+            for k, v in changes.items():
                 setattr(audit, k, v)
             return audit
 
