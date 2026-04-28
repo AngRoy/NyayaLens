@@ -15,13 +15,30 @@ const String kApiBaseUrl = String.fromEnvironment(
 );
 
 /// Demo identity headers — replaced by real Firebase ID-token verification
-/// in production.
-const Map<String, String> kDemoUserHeaders = {
-  'X-User-Id': 'demo-uid',
-  'X-User-Name': 'Demo Reviewer',
-  'X-User-Role': 'admin',
-  'X-Organization-Id': 'demo-org',
-};
+/// in production. Override at build time with:
+///   --dart-define=X_USER_ID=...
+///   --dart-define=X_USER_NAME=...
+///   --dart-define=X_USER_ROLE=...
+///   --dart-define=X_ORGANIZATION_ID=...
+/// Pass empty strings to omit a header entirely (so a production bundle
+/// does not advertise a baked-in 'admin' role).
+const String _demoUserId = String.fromEnvironment('X_USER_ID', defaultValue: 'demo-uid');
+const String _demoUserName =
+    String.fromEnvironment('X_USER_NAME', defaultValue: 'Demo Reviewer');
+const String _demoUserRole = String.fromEnvironment('X_USER_ROLE', defaultValue: 'admin');
+const String _demoOrgId =
+    String.fromEnvironment('X_ORGANIZATION_ID', defaultValue: 'demo-org');
+
+Map<String, String> _buildDemoHeaders() {
+  final headers = <String, String>{};
+  if (_demoUserId.isNotEmpty) headers['X-User-Id'] = _demoUserId;
+  if (_demoUserName.isNotEmpty) headers['X-User-Name'] = _demoUserName;
+  if (_demoUserRole.isNotEmpty) headers['X-User-Role'] = _demoUserRole;
+  if (_demoOrgId.isNotEmpty) headers['X-Organization-Id'] = _demoOrgId;
+  return headers;
+}
+
+final Map<String, String> kDemoUserHeaders = _buildDemoHeaders();
 
 class ApiException implements Exception {
   ApiException(this.message, [this.status]);
