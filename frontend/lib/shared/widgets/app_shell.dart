@@ -51,11 +51,15 @@ class NyayaAppShell extends StatelessWidget {
                     compact ? 18 : 32,
                     36,
                   ),
-                  sliver: SliverList.separated(
-                    itemBuilder: (context, index) => children[index],
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(height: 18),
-                    itemCount: children.length,
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        if (index.isOdd) return const SizedBox(height: 18);
+                        return children[index ~/ 2];
+                      },
+                      childCount:
+                          children.isEmpty ? 0 : children.length * 2 - 1,
+                    ),
                   ),
                 ),
               ],
@@ -173,8 +177,8 @@ class _AppNavigation extends StatelessWidget {
       selectedIcon: Icons.upload_file,
     ),
     _NavigationItem(
-      label: 'Workspace',
-      route: '/demo',
+      label: 'Audits',
+      route: '/audits',
       icon: Icons.analytics_outlined,
       selectedIcon: Icons.analytics,
     ),
@@ -277,6 +281,12 @@ class _AppNavigation extends StatelessWidget {
 
   bool _isSelected(String route) {
     if (route == '/') return selectedRoute == '/';
+    if (route == '/audits/new') return selectedRoute == '/audits/new';
+    if (route == '/audits') {
+      return selectedRoute == '/audits' ||
+          (selectedRoute.startsWith('/audits/') &&
+              !selectedRoute.startsWith('/audits/new'));
+    }
     return selectedRoute == route || selectedRoute.startsWith('$route/');
   }
 }
